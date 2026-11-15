@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tolga Player: play every movie on your Mac on your Apple TV</title>
-<meta name="description" content="Tolga Player is a video player for Mac that plays MKV, DTS and everything else on your Apple TV, with languages and subtitles you can switch from the couch.">
+<title>Tolga Player: every movie on your Mac or Linux PC, on your Apple TV</title>
+<meta name="description" content="Tolga Player is a video player for Mac and Linux that plays MKV, DTS and everything else on your Apple TV, with languages and subtitles you can switch from the couch.">
 <link rel="icon" type="image/png" href="favicon.png?v=2">
 <link rel="apple-touch-icon" href="icon-256.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -76,6 +76,7 @@
   .hero .lede { font-size: 21px; color: var(--mist); margin: 22px 0 30px; max-width: 34ch; }
   .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
   .hero .fine { font-size: 15px; color: var(--mist); margin-top: 16px; }
+  .hero .fine .alt { color: var(--paper); white-space: nowrap; }
 
   /* the room: an Apple TV picture on the wall, Tolga on a Mac in front */
   .room { position: relative; aspect-ratio: 6 / 5; }
@@ -207,13 +208,14 @@
 
   <header class="hero">
     <div>
-      <h1>Every movie on your Mac, on your Apple&nbsp;TV.</h1>
-      <p class="lede">MKV, DTS, two languages and a pile of subtitles: Tolga Player plays them on the big screen in about a second, and you switch them from the couch.</p>
+      <h1>Every movie, on your Apple&nbsp;TV.</h1>
+      <p class="lede">MKV, DTS, two languages and a pile of subtitles: Tolga Player sends them from your Mac or Linux PC to the big screen in about a second, and you switch them from the couch.</p>
       <div class="actions">
         <a class="button primary" data-link="downloadUrl" data-os-label href="#">Download for Mac</a>
         <a class="button ghost" href="#pricing">Buy for <span data-text="price">$14.99</span></a>
       </div>
-      <p class="fine" data-os-fine>Free on your Mac. AirPlay free for 14 days. For Apple Silicon Macs with macOS 12 or later.</p>
+      <p class="fine"><span data-os-fine>Free on your computer. AirPlay free for 14 days. For Apple Silicon Macs with macOS 12 or later.</span>
+        <a class="alt" data-os-alt href="#">Also for Linux</a></p>
     </div>
 
     <div class="room" id="room" aria-label="Tolga Player on a Mac sending a movie to an Apple TV" role="img">
@@ -287,19 +289,19 @@
         <tr><td>TS, M2TS, AVI</td><td>H.264, HEVC</td><td>AAC, AC-3, E-AC-3</td><td class="result">Plays as is</td></tr>
       </tbody>
     </table>
-    <p class="note">Videos in AV1, VP9, MPEG-2 or VC-1 would have to be re-encoded, so Tolga Player plays them on your Mac only.</p>
+    <p class="note">Videos in AV1, VP9, MPEG-2 or VC-1 would have to be re-encoded, so Tolga Player plays them on your computer only.</p>
   </div>
 </section>
 
 <section class="features" id="features">
   <div class="wrap">
     <h2>A good player first.</h2>
-    <p class="quiet">Tolga Player is a quiet, quick video player for your Mac. The Apple TV part is one click away.</p>
+    <p class="quiet">Tolga Player is a quiet, quick video player for your Mac or Linux PC. The Apple TV part is one click away.</p>
     <div class="grid">
       <div class="feature">
         <svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
         <h3>Starts in about a second</h3>
-        <p>No waiting while a whole movie is converted. The TV starts right where you paused on the Mac, and jumping ahead takes a moment.</p>
+        <p>No waiting while a whole movie is converted. The TV starts right where you paused on your computer, and jumping ahead takes a moment.</p>
       </div>
       <div class="feature">
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/></svg>
@@ -324,7 +326,7 @@
       <div class="feature">
         <svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/></svg>
         <h3>Stays in your home</h3>
-        <p>Movies go from your Mac to your TV over your own network. Nothing is uploaded, and there is no account.</p>
+        <p>Movies go from your computer to your TV over your own network. Nothing is uploaded, and there is no account.</p>
       </div>
     </div>
   </div>
@@ -334,9 +336,9 @@
   <div class="wrap">
     <h2>How it works</h2>
     <ol>
-      <li><h3>Open a movie</h3><p>Drop it on Tolga Player or open it from Finder. It plays on your Mac.</p></li>
+      <li><h3>Open a movie</h3><p>Drop it on Tolga Player or open it from your files. It plays on your computer.</p></li>
       <li><h3>Pick your Apple TV</h3><p>Click the AirPlay button and choose the TV. The first time, type the code it shows.</p></li>
-      <li><h3>Watch</h3><p>The movie continues on the TV. Pause, skip and switch languages with the Siri Remote or from your Mac.</p></li>
+      <li><h3>Watch</h3><p>The movie continues on the TV. Pause, skip and switch languages with the Siri Remote or from your computer.</p></li>
     </ol>
   </div>
 </section>
@@ -348,9 +350,9 @@
       <div class="plan">
         <h3>Tolga Player</h3>
         <div class="price">Free</div>
-        <div class="per">to play on your Mac</div>
+        <div class="per">to play on your computer</div>
         <ul>
-          <li>Everything on your Mac, no time limit</li>
+          <li>Everything on your computer, no time limit</li>
           <li>AirPlay to your Apple TV for 14 days</li>
           <li>Subtitle search, equalizer, playlists</li>
         </ul>
@@ -363,7 +365,7 @@
         <ul>
           <li>AirPlay to every Apple TV in your home</li>
           <li>MKV, DTS and every track on the TV</li>
-          <li>The license key works on all your Macs</li>
+          <li>One key for all your Macs and Linux PCs</li>
           <li>30-day refund, <a href="refund.html">no questions asked</a></li>
         </ul>
         <a class="button primary" data-link="buyUrl" href="#">Buy Tolga Player</a>
@@ -377,17 +379,17 @@
     <h2>Questions</h2>
     <div class="list">
       <details><summary>Which Apple TV do I need?</summary>
-        <p>An Apple TV with tvOS 26 or later, on the same network as your Mac. Tolga Player finds it on its own.</p></details>
-      <details><summary>Which Macs does it run on?</summary>
-        <p>Macs with Apple Silicon (M1 and later) and macOS 12 or later.</p></details>
-      <details><summary>Is there a Linux version?</summary>
-        <p>Yes, for 64-bit PCs with Ubuntu 22.04, Debian 12, Fedora 36 or newer, and most other distributions since 2022. It is a single file (AppImage): download it, make it executable and open it. AirPlay and the license work the same as on a Mac, and one license key covers both. <a href="https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Linux.AppImage">Download for Linux</a></p></details>
+        <p>An Apple TV with tvOS 26 or later, on the same network as your computer. Tolga Player finds it on its own.</p></details>
+      <details><summary>Which computers does it run on?</summary>
+        <p>Macs with Apple Silicon (M1 and later) and macOS 12 or later, and 64-bit PCs with Linux: Ubuntu 22.04, Debian 12, Fedora 36 or newer, and most other distributions since 2022.</p></details>
+      <details><summary>How do I install it on Linux?</summary>
+        <p>Yes, for 64-bit PCs with Ubuntu 22.04, Debian 12, Fedora 36 or newer, and most other distributions since 2022. There is nothing to install: the Linux version is a single file (AppImage). Download it, make it executable (right-click &gt; Properties, or <code>chmod +x</code>) and open it. AirPlay and the license work the same as on a Mac, and one license key covers both. <a href="https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Linux.AppImage">Download for Linux</a></p></details>
       <details><summary>Does it lower the picture quality?</summary>
         <p>No. The picture is sent exactly as it is in the file, 4K and all. Only sound the Apple TV can't play, like DTS or TrueHD, is converted, to Dolby Digital Plus with the 5.1 channels kept.</p></details>
       <details><summary>Are my movies uploaded anywhere?</summary>
-        <p>No. Tolga Player sends them straight from your Mac to your Apple TV over your home network. There is no account and no cloud.</p></details>
+        <p>No. Tolga Player sends them straight from your computer to your Apple TV over your home network. There is no account and no cloud.</p></details>
       <details><summary>What happens after the 14 days?</summary>
-        <p>Tolga Player keeps playing everything on your Mac for free. Sending to the Apple TV asks for a license key, which you get by email when you buy.</p></details>
+        <p>Tolga Player keeps playing everything on your computer for free. Sending to the Apple TV asks for a license key, which you get by email when you buy.</p></details>
       <details><summary>Can I get my money back?</summary>
         <p>Yes, within 30 days of buying, no questions asked. Orders are handled by Paddle, our reseller; see the <a href="refund.html">refund policy</a>.</p></details>
       <details><summary>Is Tolga Player open source?</summary>
@@ -409,17 +411,24 @@
       </div>
     </div>
     <p>Tolga Player is made by Tolga Çiftciçelik, Istanbul, Türkiye. Orders are processed by Paddle.com, our reseller and Merchant of Record.</p>
-    <p>Apple, Apple TV, AirPlay, Mac and macOS are trademarks of Apple Inc. Tolga Player is not affiliated with or endorsed by Apple Inc.</p>
+    <p>Apple, Apple TV, AirPlay, Mac and macOS are trademarks of Apple Inc. Tolga Player is not affiliated with or endorsed by Apple Inc. Linux is a registered trademark of Linus Torvalds.</p>
   </div>
 </footer>
 
 <script>
-  // Linux (not Android): the AppImage instead of the Mac disk image
+  // Linux (not Android): the AppImage first, the Mac disk image as the other choice
+  const macUrl = CONFIG.downloadUrl;
+  let altUrl = CONFIG.downloadLinux;
   if (CONFIG.linuxReady && /Linux/.test(navigator.platform || navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
     CONFIG.downloadUrl = CONFIG.downloadLinux;
+    altUrl = macUrl;
     for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Linux";
     for (const el of document.querySelectorAll("[data-os-fine]"))
       el.textContent = "Free on your computer. AirPlay free for 14 days. One file for 64-bit Linux: make it executable and open it.";
+    for (const el of document.querySelectorAll("[data-os-alt]")) el.textContent = "Also for Mac";
+  }
+  for (const a of document.querySelectorAll("[data-os-alt]")) {
+    if (CONFIG.linuxReady) a.href = altUrl; else a.remove();
   }
   for (const a of document.querySelectorAll("[data-link]")) a.href = CONFIG[a.dataset.link];
   for (const a of document.querySelectorAll("[data-mail]")) { a.href = "mailto:" + CONFIG[a.dataset.mail]; a.textContent = CONFIG[a.dataset.mail]; }
