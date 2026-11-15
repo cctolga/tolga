@@ -149,6 +149,9 @@ public:
     float controlsAlpha() const { return m_alpha; }
     // Seek-bar previews come from here (may be null).
     void setThumbnails(const Thumbnailer* thumbs) { m_thumbs = thumbs; }
+    // The drawable the frame is rendered into (pixels) and its pixels per point; the
+    // controls are laid out for exactly this size.
+    void setFramebuffer(int w, int h, float scale) { m_fbW = w; m_fbH = h; m_fbScale = scale > 0 ? scale : 1.0f; }
 
     // Side panel with video / audio / subtitle tracks (IINA-style), sliding in from the right.
     enum class PanelTab { Video, Audio, Subtitles };
@@ -212,6 +215,8 @@ private:
     float       m_playlistAnim = 0.0f;
     float       m_leftVisibleW = 0.0f;
     bool        m_chaptersTab = false;
+    int         m_fbW = 0, m_fbH = 0;
+    float       m_fbScale = 1.0f;
     int         m_playlistSelected = -1;
     int         m_dragFrom = -1;     // playlist row being dragged
     int         m_aspectIdx = 0;

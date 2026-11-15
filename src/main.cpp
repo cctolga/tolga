@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <map>
 #include <vector>
@@ -26,6 +27,14 @@
 #endif
 
 namespace {
+
+// Redraws during a live window resize: macOS runs its own loop then, and SDL reports the new
+// size only through event watchers (SDL_EVENT_WINDOW_EXPOSED with data1 = 1).
+bool SDLCALL liveResizeWatch(void* userdata, SDL_Event* event) {
+    if (event->type == SDL_EVENT_WINDOW_EXPOSED && event->window.data1 == 1)
+        (*static_cast<std::function<void()>*>(userdata))();
+    return true;
+}
 
 // Stands in for the AirPlay module in builds without it: no receivers, never casting.
 class NoAirPlay final : public AirPlay {
@@ -292,6 +301,60 @@ int main(int argc, char** argv) {
         SDL_SetWindowFullscreen(window, fullscreen);
     };
 
+    // Draws one frame: video first, controls on top. Also called while the window is being
+    // resized, when macOS holds the main loop and only an event watch gets to run.
+    auto drawFrame = [&]() -> OverlayActions {
+        int fbw = 0, fbh = 0;
+        float pixelScale = 1.0f;
+        if (!macDrawableSize(window, &fbw, &fbh, &pixelScale)) {
+            SDL_GetWindowSizeInPixels(window, &fbw, &fbh);
+            pixelScale = SDL_GetWindowPixelDensity(window);
+        }
+        overlay.setFramebuffer(fbw, fbh, pixelScale);
+        glViewport(0, 0, fbw, fbh);
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        const PlayerState& st = player.state();
+        if (!st.idle) player.render(0, fbw, fbh);
+
+        airplayDevices = airplay->devices();
+        licenseInfo = airplay->license();
+        AirPlayView apView{&airplayDevices, airplay->searching(), castTarget, &castStatus};
+        apView.available = hasAirPlay;
+        apView.license = hasAirPlay ? &licenseInfo : nullptr;
+        apView.licenseError = licenseError;
+        onlineStatus = online.status();
+        OnlineView onlineView{&onlineStatus, &onlineSettings, OpenSubtitles::queryFromFileName(st.path)};
+        // seek-bar previews: start once the file's length and picture size are known
+        if (!st.idle && st.duration > 0 && st.videoW > 0) thumbnails.start(st.path, st.duration, st.videoW, st.videoH);
+        else if (st.idle) thumbnails.clear();
+
+        PlaylistView playlistView;
+        if (!st.idle && st.duration > 0) {
+            durations.set(st.path, st.duration);
+            const double pos = castStatus.active() ? castStatus.position : st.timePos;
+            watched[st.path] = float(std::clamp(pos / st.duration, 0.0, 1.0));
+        }
+        for (const PlaylistEntry& e : st.playlist) {
+            playlistView.durations.push_back(durations.get(e.path));
+            auto w = watched.find(e.path);
+            playlistView.progress.push_back(w == watched.end() ? 0.0f : w->second);
+        }
+#ifdef __APPLE__
+        overlay.setTitlebarOverlay(true, fullscreen);
+#endif
+        OverlayActions act = overlay.draw(st, fullscreen, apView, onlineView, playlistView);
+        // the title bar buttons fade together with the controls
+        macSetTitlebarAlpha(window, overlay.controlsAlpha());
+        overlay.render();
+        SDL_GL_SwapWindow(window);
+        player.reportSwap();
+        return act;
+    };
+    std::function<void()> liveDraw = [&] { drawFrame(); };
+    SDL_AddEventWatch(liveResizeWatch, &liveDraw);
+
     while (running) {
         // Sleep until something happens. While the controls are fading, or ImGui
         // still needs frames, poll instead so animations stay smooth (vsync paces us).
@@ -346,6 +409,10 @@ int main(int argc, char** argv) {
                     break;
                 case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
                     fullscreen = true;
+                    break;
+                case SDL_EVENT_WINDOW_RESIZED:
+                case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+                    redrawFrames = std::max(redrawFrames, 2);  // draw again once the size has settled
                     break;
                 case SDL_EVENT_DROP_FILE:
                     // dropping an .srt onto a playing video adds it as a subtitle
@@ -533,43 +600,9 @@ int main(int argc, char** argv) {
         if (!newFrame && redrawFrames <= 0 && !overlay.isAnimating()) continue;
         if (redrawFrames > 0) --redrawFrames;
 
-        // ---- render: video first, controls on top
-        int fbw = 0, fbh = 0;
-        SDL_GetWindowSizeInPixels(window, &fbw, &fbh);
-        glViewport(0, 0, fbw, fbh);
-        glClearColor(0, 0, 0, 1);
-        glClear(GL_COLOR_BUFFER_BIT);
-
+        // ---- render
+        OverlayActions act = drawFrame();
         const PlayerState& st = player.state();
-        if (!st.idle) player.render(0, fbw, fbh);
-
-        airplayDevices = airplay->devices();
-        licenseInfo = airplay->license();
-        AirPlayView apView{&airplayDevices, airplay->searching(), castTarget, &castStatus};
-        apView.available = hasAirPlay;
-        apView.license = hasAirPlay ? &licenseInfo : nullptr;
-        apView.licenseError = licenseError;
-        onlineStatus = online.status();
-        OnlineView onlineView{&onlineStatus, &onlineSettings, OpenSubtitles::queryFromFileName(st.path)};
-        // seek-bar previews: start once the file's length and picture size are known
-        if (!st.idle && st.duration > 0 && st.videoW > 0) thumbnails.start(st.path, st.duration, st.videoW, st.videoH);
-        else if (st.idle) thumbnails.clear();
-
-        PlaylistView playlistView;
-        if (!st.idle && st.duration > 0) {
-            durations.set(st.path, st.duration);
-            const double pos = castStatus.active() ? castStatus.position : st.timePos;
-            watched[st.path] = float(std::clamp(pos / st.duration, 0.0, 1.0));
-        }
-        for (const PlaylistEntry& e : st.playlist) {
-            playlistView.durations.push_back(durations.get(e.path));
-            auto w = watched.find(e.path);
-            playlistView.progress.push_back(w == watched.end() ? 0.0f : w->second);
-        }
-#ifdef __APPLE__
-        overlay.setTitlebarOverlay(true, fullscreen);
-#endif
-        OverlayActions act = overlay.draw(st, fullscreen, apView, onlineView, playlistView);
         if (act.openLicense) { licenseError.clear(); overlay.openLicenseDialog(); }
         if (act.closeLicense) overlay.closeLicenseDialog();
         if (act.openBuyPage) {
@@ -582,11 +615,6 @@ int main(int argc, char** argv) {
                 overlay.showToast("Thank you! Tolga is licensed to " + airplay->license().email + ".");
             }
         }
-        // the title bar buttons fade together with the controls
-        macSetTitlebarAlpha(window, overlay.controlsAlpha());
-        overlay.render();
-        SDL_GL_SwapWindow(window);
-        player.reportSwap();
 
         // hide the mouse cursor together with the controls during playback
         if (overlay.controlsHidden() && !st.idle) SDL_HideCursor();
@@ -683,6 +711,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    SDL_RemoveEventWatch(liveResizeWatch, &liveDraw);
     airplay->shutdown();
     overlay.shutdown();
     player.shutdown();  // needs the GL context still alive

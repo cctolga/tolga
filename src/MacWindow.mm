@@ -35,3 +35,25 @@ void macSetTitlebarAlpha(SDL_Window* window, float alpha) {
     const BOOL hide = a <= 0.0;
     if (bar.hidden != hide) bar.hidden = hide;
 }
+
+bool macDrawableSize(SDL_Window* window, int* w, int* h, float* scale) {
+    NSWindow* win = nsWindowOf(window);
+    NSView* view = win ? win.contentView : nil;
+    if (!view) return false;
+    const NSRect px = [view convertRectToBacking:view.bounds];
+    const int pw = (int)px.size.width, ph = (int)px.size.height;
+    if (pw <= 0 || ph <= 0) return false;
+    static int lastW = 0, lastH = 0;
+    if (pw != lastW || ph != lastH) {  // new size: let the GL drawable follow the view
+        lastW = pw;
+        lastH = ph;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        [[NSOpenGLContext currentContext] update];
+#pragma clang diagnostic pop
+    }
+    *w = pw;
+    *h = ph;
+    *scale = view.bounds.size.width > 0 ? (float)(px.size.width / view.bounds.size.width) : 1.0f;
+    return true;
+}

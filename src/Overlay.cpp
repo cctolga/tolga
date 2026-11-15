@@ -292,6 +292,11 @@ OverlayActions Overlay::draw(const PlayerState& st, bool fullscreen, const AirPl
                              const OnlineView& online, const PlaylistView& playlist) {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
+    if (m_fbW > 0 && m_fbH > 0) {  // same size as the video below, even mid-resize
+        ImGuiIO& io = ImGui::GetIO();
+        io.DisplaySize = {m_fbW / m_fbScale, m_fbH / m_fbScale};
+        io.DisplayFramebufferScale = {m_fbScale, m_fbScale};
+    }
     ImGui::NewFrame();
 
     const uint64_t now = SDL_GetTicks();
@@ -700,7 +705,10 @@ void Overlay::drawControls(const PlayerState& st, bool fullscreen, const AirPlay
     size.x -= m_panelVisibleW + m_leftVisibleW;  // keep the bar between the playlist and the side panel
     const float a = m_alpha;
 
-    const float panelW = std::clamp(size.x - 48.0f, 340.0f, 760.0f);
+    // A fixed width, like IINA and QuickTime: the bar keeps its size while the window is
+    // resized and only gets narrower when the window itself is too narrow for it.
+    constexpr float kBarW = 540.0f;
+    const float panelW = std::max(340.0f, std::min(kBarW, size.x - 32.0f));
     const float panelH = kPanelH;
     const ImVec2 p0{m_leftVisibleW + (size.x - panelW) * 0.5f, size.y - panelH - kPanelBottom};
     const ImVec2 p1{p0.x + panelW, p0.y + panelH};
@@ -734,7 +742,7 @@ void Overlay::drawControls(const PlayerState& st, bool fullscreen, const AirPlay
     const float row1 = p0.y + 32.0f;
     const float rowY = p0.y + 70.0f;
     const bool tiny = panelW < 480.0f;     // side panels open / small window: fewer things
-    const bool compact = panelW < 600.0f;  // no volume slider
+    const bool compact = panelW < 500.0f;  // no volume slider
     const ImU32 white = col(1, 1, 1, 0.95f, a);
     const ImU32 dimmed = col(1, 1, 1, cast ? 0.30f : 0.95f, a);
 
@@ -782,7 +790,7 @@ void Overlay::drawControls(const PlayerState& st, bool fullscreen, const AirPlay
         ImGui::BeginDisabled(cast != nullptr);  // the TV's own remote sets the volume
         if (iconButton("##mute", spk, 15, a)) out.toggleMute = true;
         const float volX = spk.x + 22;
-        const float volW = std::min(110.0f, mid.x - 56 - 30 - volX);
+        const float volW = std::min(90.0f, mid.x - 56 - 48 - volX);  // keep clear of the transport
         float vol = st.muted ? 0.0f : float(st.volume / 100.0);
         if (!compact && volW > 40 && thinSlider("##vol", {volX, row1}, volW, vol, a)) {
             out.setVolume = true;
