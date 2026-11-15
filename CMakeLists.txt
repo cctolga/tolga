@@ -1,0 +1,186 @@
+cmake_minimum_required(VERSION 3.20)
+project(Tolga VERSION 0.1.0 LANGUAGES C CXX)
+if(APPLE)
+  enable_language(OBJCXX)   # must come right after project(), before any target (Ninja needs it)
+endif()
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+include(FetchContent)
+
+# ---------------------------------------------------------------- SDL3
+# Use a system SDL3 (e.g. `brew install sdl3`) if present, otherwise build it.
+# Release bundles set TOLGA_SYSTEM_SDL=OFF so SDL is linked statically (nothing from Homebrew).
+option(TOLGA_SYSTEM_SDL "Use an installed SDL3 if there is one" ON)
+if(TOLGA_SYSTEM_SDL)
+  find_package(SDL3 CONFIG QUIET)
+endif()
+if(NOT SDL3_FOUND)
+  message(STATUS "SDL3 not found on system, fetching it")
+  set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+  set(SDL_STATIC ON CACHE BOOL "" FORCE)
+  set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+  set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(SDL3
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+    GIT_TAG        release-3.4.20
+    GIT_SHALLOW    TRUE)
+  FetchContent_MakeAvailable(SDL3)
+endif()
+
+# ---------------------------------------------------------------- Dear ImGui
+FetchContent_Declare(imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG        v1.92.9b
+  GIT_SHALLOW    TRUE)
+FetchContent_MakeAvailable(imgui)
+
+# JSON for the OpenSubtitles API (single header)
+FetchContent_Declare(json
+  URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(json)
+
+# HTTPS client for online subtitle search (macOS ships libcurl; Linux: libcurl4-openssl-dev)
+find_package(CURL REQUIRED)
+
+find_package(OpenGL REQUIRED)
+
+add_library(imgui STATIC
+  ${imgui_SOURCE_DIR}/imgui.cpp
+  ${imgui_SOURCE_DIR}/imgui_draw.cpp
+  ${imgui_SOURCE_DIR}/imgui_tables.cpp
+  ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
+target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+target_link_libraries(imgui PUBLIC SDL3::SDL3 OpenGL::GL)
+
+# ---------------------------------------------------------------- libmpv
+# macOS: `brew install mpv pkg-config`
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
+
+# ---------------------------------------------------------------- AirPlay
+# AirPlay is a separate, closed-source module; the player only knows the interface in
+# include/tolga/AirPlayApi.h. Where it comes from, in this order:
+#   1. TOLGA_AIRPLAY_DIR: the module's private source folder (the author's builds)
+#   2. the prebuilt library (macOS): downloaded once from this repository's releases and
+#      checked against the SHA-256 in cmake/AirPlayPrebuilt.cmake. AirPlay then works for a
+#      14-day trial and afterwards needs a Tolga license.
+#      TOLGA_AIRPLAY_PREBUILT_FILE uses a local package instead (any OS, for testing).
+#   3. none: src/AirPlayNone.cpp, the AirPlay menu points to the official app.
+set(TOLGA_AIRPLAY_DIR "" CACHE PATH "Source folder of the Tolga AirPlay module")
+option(TOLGA_AIRPLAY_PREBUILT "Download the prebuilt AirPlay module (macOS)" ON)
+set(TOLGA_AIRPLAY_PREBUILT_FILE "" CACHE FILEPATH "Local prebuilt AirPlay package (.tar.gz) to use instead of downloading")
+set(TOLGA_WEBSITE "https://cctolga.github.io/tolga/" CACHE STRING "Web page of the official Tolga app")
+set(TOLGA_API_INCLUDE ${CMAKE_SOURCE_DIR}/include)
+find_package(Threads REQUIRED)
+include(cmake/AirPlayPrebuilt.cmake)
+file(STRINGS ${TOLGA_API_INCLUDE}/tolga/AirPlayApi.h _api_line REGEX "^#define TOLGA_AIRPLAY_API_VERSION")
+string(REGEX REPLACE ".* ([0-9]+).*" "\\1" _api_version "${_api_line}")
+
+set(_airplay_lib "")
+if(TOLGA_AIRPLAY_DIR)
+  add_subdirectory(${TOLGA_AIRPLAY_DIR} ${CMAKE_BINARY_DIR}/airplay-module)
+  set(_airplay_lib tolga_airplay_module)
+  message(STATUS "AirPlay: module built from ${TOLGA_AIRPLAY_DIR}")
+elseif(TOLGA_AIRPLAY_PREBUILT AND (TOLGA_AIRPLAY_PREBUILT_FILE OR (APPLE AND TOLGA_AIRPLAY_PREBUILT_URL)))
+  if(APPLE)
+    set(_prebuilt_name libtolga_airplay.dylib)
+    set(_prebuilt_soname "@rpath/libtolga_airplay.dylib")
+  else()
+    set(_prebuilt_name libtolga_airplay.so)
+    set(_prebuilt_soname libtolga_airplay.so)
+  endif()
+  set(_pkg "")
+  if(TOLGA_AIRPLAY_PREBUILT_FILE)
+    set(_pkg "${TOLGA_AIRPLAY_PREBUILT_FILE}")
+    set(_dir ${CMAKE_BINARY_DIR}/airplay-prebuilt-local)
+  elseif(NOT TOLGA_AIRPLAY_PREBUILT_API EQUAL _api_version)
+    message(WARNING "AirPlay: the prebuilt module is for API ${TOLGA_AIRPLAY_PREBUILT_API}, this source has "
+                    "${_api_version}; building without AirPlay until a matching module is published")
+  else()
+    set(_dir ${CMAKE_BINARY_DIR}/airplay-prebuilt-${TOLGA_AIRPLAY_PREBUILT_VERSION})
+    set(_pkg ${_dir}.tar.gz)
+    if(NOT EXISTS ${_dir}/lib/${_prebuilt_name})
+      message(STATUS "AirPlay: downloading the prebuilt module ${TOLGA_AIRPLAY_PREBUILT_VERSION}")
+      file(DOWNLOAD ${TOLGA_AIRPLAY_PREBUILT_URL} ${_pkg} TLS_VERIFY ON STATUS _st
+           EXPECTED_HASH SHA256=${TOLGA_AIRPLAY_PREBUILT_SHA256})
+      list(GET _st 0 _code)
+      if(NOT _code EQUAL 0)
+        list(GET _st 1 _msg)
+        message(WARNING "AirPlay: could not download the prebuilt module (${_msg}); building without AirPlay")
+        file(REMOVE ${_pkg})
+        set(_pkg "")
+      endif()
+    endif()
+  endif()
+  if(_pkg AND NOT EXISTS ${_dir}/lib/${_prebuilt_name})
+    file(REMOVE_RECURSE ${_dir})
+    file(ARCHIVE_EXTRACT INPUT ${_pkg} DESTINATION ${_dir}.x)
+    file(GLOB _inner LIST_DIRECTORIES true ${_dir}.x/*)
+    file(RENAME ${_inner} ${_dir})
+    file(REMOVE_RECURSE ${_dir}.x)
+  endif()
+  if(EXISTS ${_dir}/lib/${_prebuilt_name})
+    # a shared library that exports only createAirPlay(); found next to the app at run time
+    add_library(tolga_airplay_prebuilt SHARED IMPORTED)
+    set_target_properties(tolga_airplay_prebuilt PROPERTIES
+      IMPORTED_LOCATION ${_dir}/lib/${_prebuilt_name}
+      IMPORTED_SONAME "${_prebuilt_soname}"
+      INTERFACE_INCLUDE_DIRECTORIES ${TOLGA_API_INCLUDE})
+    set(_airplay_lib tolga_airplay_prebuilt)
+    set(TOLGA_AIRPLAY_PREBUILT_DIR ${_dir} CACHE INTERNAL "")
+    message(STATUS "AirPlay: prebuilt closed-source module (${_dir})")
+  endif()
+endif()
+if(NOT _airplay_lib)
+  add_library(tolga_airplay_none STATIC src/AirPlayNone.cpp)
+  target_include_directories(tolga_airplay_none PUBLIC ${TOLGA_API_INCLUDE})
+  set(_airplay_lib tolga_airplay_none)
+  message(STATUS "AirPlay: not included")
+endif()
+
+# ---------------------------------------------------------------- app
+add_executable(tolga
+  src/main.cpp
+  src/OpenSubtitles.cpp
+  src/DurationCache.cpp
+  src/Thumbnailer.cpp
+  src/MpvPlayer.cpp
+  src/Overlay.cpp
+  src/Ffmpeg.cpp)
+target_include_directories(tolga PRIVATE ${TOLGA_API_INCLUDE})
+target_link_libraries(tolga PRIVATE imgui PkgConfig::MPV ${_airplay_lib} CURL::libcurl nlohmann_json::nlohmann_json
+                      Threads::Threads)
+target_compile_definitions(tolga PRIVATE TOLGA_WEBSITE="${TOLGA_WEBSITE}")
+
+# OpenSubtitles API key built into the app, so users are never asked for one.
+# Put the key in a file named "opensubtitles.key" next to this CMakeLists.txt (it is in
+# .gitignore, so it never ends up in the repository), or pass -DTOLGA_OPENSUBTITLES_KEY=...
+# Without a key, "Search Online" asks the user for their own (free) OpenSubtitles API key.
+set(TOLGA_OPENSUBTITLES_KEY "" CACHE STRING "OpenSubtitles.com API key built into the app")
+set(_os_key "${TOLGA_OPENSUBTITLES_KEY}")
+if(_os_key STREQUAL "" AND EXISTS "${CMAKE_SOURCE_DIR}/opensubtitles.key")
+  file(READ "${CMAKE_SOURCE_DIR}/opensubtitles.key" _os_key)
+  string(STRIP "${_os_key}" _os_key)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/opensubtitles.key")
+endif()
+if(_os_key STREQUAL "")
+  message(STATUS "OpenSubtitles: no built-in API key (users enter their own)")
+else()
+  message(STATUS "OpenSubtitles: built-in API key from the build")
+endif()
+target_compile_definitions(tolga PRIVATE TOLGA_OPENSUBTITLES_KEY="${_os_key}")
+
+if(APPLE)
+  target_sources(tolga PRIVATE src/MacWindow.mm)
+  target_link_libraries(tolga PRIVATE "-framework Cocoa")
+  target_compile_definitions(tolga PRIVATE GL_SILENCE_DEPRECATION)
+  target_compile_definitions(imgui PRIVATE GL_SILENCE_DEPRECATION)
+endif()

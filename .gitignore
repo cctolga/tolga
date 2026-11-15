@@ -1,0 +1,7 @@
+build/
+opensubtitles.key
+deps/
+dist/
+build-release/
+license-public.key
+*.pem

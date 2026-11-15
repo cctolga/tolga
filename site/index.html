@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tolga: play every movie on your Mac on your Apple TV</title>
+<meta name="description" content="Tolga is a video player for Mac that plays MKV, DTS and everything else on your Apple TV, with languages and subtitles you can switch from the couch.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<script>
+  // ---- edit these when you publish ----
+  const CONFIG = {
+    price: "$14.99",
+    downloadUrl: "https://github.com/cctolga/tolga/releases/latest",
+    buyUrl: "#pricing",                       // fallback if Paddle isn't set up
+    // Paddle checkout: sandbox token starts with "test_", live with "live_"
+    paddleToken: "test_0e56babf0a68e23ff84999667cc",
+    paddlePrice: "pri_01m7dtnyzkpcd2xrd1wb5t8ztb",
+    sourceUrl: "https://github.com/cctolga/tolga",
+    contact: "cctolga@gmail.com",
+  };
+</script>
+<style>
+  :root {
+    --night: #15132b;     /* the dark living room */
+    --dusk: #211e40;      /* raised surfaces */
+    --line: #34305c;
+    --glow: #8b6cff;      /* Tolga's violet */
+    --screen: #ffc27a;    /* warm light from the TV */
+    --paper: #eceaf6;
+    --mist: #a6a3c2;
+    --radius-big: 22px;
+    --radius-small: 10px;
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-optical-sizing: auto;
+    color: var(--paper);
+    background: var(--night);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-size: 18px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--screen); outline-offset: 3px; border-radius: 6px; }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+  p { margin: 0 0 1em; max-width: 62ch; }
+  h1, h2, h3 { margin: 0; font-weight: 800; letter-spacing: -0.02em; line-height: 1.04; }
+  h2 { font-size: clamp(34px, 4.4vw, 52px); margin-bottom: 18px; }
+  h3 { font-size: 22px; letter-spacing: -0.01em; margin-bottom: 6px; font-weight: 700; }
+  .quiet { color: var(--mist); }
+
+  /* ---------- nav ---------- */
+  nav { display: flex; align-items: center; gap: 28px; padding: 22px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 22px; text-decoration: none; letter-spacing: -0.02em; }
+  .brand img { width: 34px; height: 34px; }
+  nav .links { margin-left: auto; display: flex; gap: 26px; align-items: center; }
+  nav .links a { text-decoration: none; color: var(--mist); font-size: 16px; }
+  nav .links a:hover { color: var(--paper); }
+
+  .button { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 999px; font-weight: 700;
+            font-size: 17px; text-decoration: none; border: 1px solid transparent; transition: background .15s, border-color .15s; }
+  .button.primary { background: var(--paper); color: var(--night); }
+  .button.primary:hover { background: #fff; }
+  .button.ghost { border-color: var(--line); color: var(--paper); }
+  .button.ghost:hover { border-color: var(--mist); }
+  nav .button { padding: 9px 16px; font-size: 15px; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 48px 0 40px; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; align-items: center; }
+  .hero h1 { font-size: clamp(44px, 5.5vw, 72px); letter-spacing: -0.035em; }
+  .hero .lede { font-size: 21px; color: var(--mist); margin: 22px 0 30px; max-width: 34ch; }
+  .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .hero .fine { font-size: 15px; color: var(--mist); margin-top: 16px; }
+
+  /* the room: an Apple TV picture on the wall, Tolga on a Mac in front */
+  .room { position: relative; aspect-ratio: 6 / 5; }
+  .tv { position: absolute; right: 0; top: 2%; width: 96%; aspect-ratio: 16 / 9; border-radius: 14px; padding: 9px;
+        background: #0c0b1a; box-shadow: 0 0 0 1px #2c2850, 0 30px 80px -20px rgba(0,0,0,.6); }
+  .tv::after { /* light the screen throws into the room */
+        content: ""; position: absolute; inset: auto -12% -46% -12%; height: 70%; z-index: -1; border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(255,194,122,.32), rgba(139,108,255,.12) 60%, transparent);
+        filter: blur(18px); opacity: var(--lit, 1); transition: opacity 1.2s ease; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 7px; overflow: hidden; }
+  .scene { position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 70% 58%, #fff3d6 0 3.2%, rgba(255,214,150,.9) 3.4%, rgba(255,184,110,.0) 16%),
+      linear-gradient(180deg, #2a2266 0%, #6a3f8f 38%, #d9725f 66%, #ffb36b 78%);
+  }
+  .scene::before { /* far hills */
+    content: ""; position: absolute; left: -5%; right: -5%; bottom: 0; height: 38%;
+    background: #3a2650; border-radius: 55% 45% 0 0 / 70% 60% 0 0; transform: translateX(-12%); }
+  .scene::after { /* near hills */
+    content: ""; position: absolute; left: -10%; right: -10%; bottom: -6%; height: 30%;
+    background: #1c1433; border-radius: 40% 60% 0 0 / 80% 90% 0 0; transform: translateX(14%); }
+  .screen .off { position: absolute; inset: 0; background: #07060f; opacity: calc(1 - var(--lit, 1)); transition: opacity 1.2s ease; }
+
+  .mac { position: absolute; left: 0; bottom: 0; width: 58%; aspect-ratio: 16 / 10.4; border-radius: 12px; overflow: hidden;
+         background: #121026; box-shadow: 0 0 0 1px #3a3566, 0 40px 70px -18px rgba(0,0,0,.75); }
+  .mac .bar { height: 7.5%; display: flex; gap: 6px; align-items: center; padding-left: 10px; }
+  .mac .bar i { width: 9px; height: 9px; border-radius: 50%; background: #3a3566; }
+  .mac .body { position: absolute; inset: 7.5% 0 0 0; background: radial-gradient(120% 90% at 50% 30%, #1d1a3a, #0f0d20);
+               display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding-bottom: 18%; }
+  .mac .body svg { width: 16%; }
+  .mac .playing { font-size: clamp(11px, 1.35vw, 16px); font-weight: 600; opacity: var(--lit, 1); transition: opacity .8s ease .4s; }
+  .mac .file { font-size: clamp(9px, 1vw, 12px); color: var(--mist); opacity: var(--lit, 1); transition: opacity .8s ease .4s; }
+  .controls { position: absolute; left: 6%; right: 6%; bottom: 6%; height: 20%; border-radius: 10px;
+              background: rgba(40,36,74,.92); box-shadow: 0 0 0 1px #3a3566; }
+  .controls .track { position: absolute; left: 14%; right: 14%; bottom: 26%; height: 3px; border-radius: 2px; background: #4a4578; }
+  .controls .track::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 38%; border-radius: 2px; background: var(--paper); }
+  .controls .play { position: absolute; left: 50%; top: 20%; width: 3.6%; aspect-ratio: 0.9; transform: translateX(-50%);
+                    background: linear-gradient(90deg, var(--paper) 0 34%, transparent 34% 66%, var(--paper) 66%); }
+  .controls .air { position: absolute; right: 5%; top: 16%; width: 6%; aspect-ratio: 1.2; border: 1.5px solid var(--glow);
+                   border-radius: 2px; }
+  .controls .air::after { content: ""; position: absolute; left: 50%; bottom: -55%; width: 70%; aspect-ratio: 1.1;
+                   transform: translateX(-50%); background: var(--glow); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .menu { position: absolute; right: 4%; bottom: 29%; width: 42%; opacity: var(--menu, 0); transition: opacity .35s ease; border-radius: 10px; padding: 3% 0;
+          background: rgba(34,31,64,.97); box-shadow: 0 0 0 1px #4a4578, 0 16px 30px rgba(0,0,0,.5);
+          font-size: clamp(9px, 1.05vw, 13px); }
+  .menu div { padding: 2.2% 7%; display: flex; justify-content: space-between; }
+  .menu .head { color: var(--mist); font-weight: 600; }
+  .menu .tv-row { background: rgba(139,108,255,var(--pick, .55)); transition: background .4s ease; }
+  .menu .tick { opacity: var(--lit, 1); transition: opacity .4s ease .2s; }
+
+  /* one moment on load (script, motion allowed): the AirPlay menu opens, the Apple TV is
+     picked, the menu closes and the TV comes on */
+  .room.boot { --lit: 0; --pick: 0; --menu: 1; }
+  .room.boot.pick { --pick: .55; }
+  .room.boot.on { --lit: 1; --pick: .55; --menu: 0; }
+
+  /* ---------- formats ---------- */
+  section { padding: 84px 0; }
+  .formats { border-top: 1px solid var(--line); }
+  .formats .intro { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: end; margin-bottom: 34px; }
+  .formats .intro p { color: var(--mist); }
+  table { width: 100%; border-collapse: collapse; font-size: 17px; }
+  th { text-align: left; font-weight: 600; color: var(--mist); padding: 0 16px 12px 0; font-size: 15px; }
+  td { padding: 16px 16px 16px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+  td.result { color: var(--screen); }
+  .note { margin-top: 18px; font-size: 15px; color: var(--mist); }
+
+  /* ---------- features ---------- */
+  .features .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 44px 40px; margin-top: 40px; }
+  .feature p { color: var(--mist); font-size: 17px; margin: 0; }
+  .feature svg { width: 30px; height: 30px; margin-bottom: 14px; stroke: var(--glow); fill: none; stroke-width: 1.8;
+                 stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---------- steps ---------- */
+  .steps ol { list-style: none; padding: 0; margin: 40px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; counter-reset: step; }
+  .steps li { counter-increment: step; }
+  .steps li::before { content: counter(step); display: block; font-size: 64px; font-weight: 800; line-height: 1; color: var(--glow); margin-bottom: 14px; letter-spacing: -0.04em; }
+  .steps li p { color: var(--mist); font-size: 17px; }
+
+  /* ---------- pricing ---------- */
+  .pricing .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 40px; border: 1px solid var(--line); border-radius: var(--radius-big); overflow: hidden; }
+  .plan { padding: 36px 38px; }
+  .plan + .plan { border-left: 1px solid var(--line); background: linear-gradient(180deg, rgba(139,108,255,.13), rgba(139,108,255,0) 70%); }
+  .plan .price { font-size: 56px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; margin: 14px 0 6px; }
+  .plan .per { color: var(--mist); font-size: 16px; margin-bottom: 22px; }
+  .plan ul { padding: 0; margin: 0 0 28px; list-style: none; }
+  .plan li { padding: 7px 0 7px 28px; position: relative; }
+  .plan li::before { content: ""; position: absolute; left: 2px; top: 15px; width: 12px; height: 6px; border-left: 2px solid var(--glow);
+                     border-bottom: 2px solid var(--glow); transform: rotate(-45deg); }
+
+  /* ---------- faq ---------- */
+  .faq .list { margin-top: 30px; max-width: 760px; }
+  details { border-top: 1px solid var(--line); padding: 4px 0; }
+  details:last-child { border-bottom: 1px solid var(--line); }
+  summary { cursor: pointer; list-style: none; padding: 16px 40px 16px 0; font-weight: 700; font-size: 19px; position: relative; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; position: absolute; right: 6px; top: 12px; font-size: 26px; font-weight: 400; color: var(--mist); transition: transform .2s; }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { color: var(--mist); font-size: 17px; }
+
+  footer { border-top: 1px solid var(--line); padding: 34px 0 50px; color: var(--mist); font-size: 15px; }
+  footer .row { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+  footer .row .links { margin-left: auto; display: flex; gap: 22px; }
+  footer p { margin: 18px 0 0; max-width: none; font-size: 14px; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; padding-top: 24px; }
+    .room { max-width: 620px; }
+    .formats .intro { grid-template-columns: 1fr; gap: 0; }
+    .features .grid, .steps ol { grid-template-columns: 1fr 1fr; }
+    nav .links a:not(.button) { display: none; }
+  }
+  @media (max-width: 620px) {
+    body { font-size: 17px; }
+    .features .grid, .steps ol, .pricing .plans { grid-template-columns: 1fr; }
+    .plan + .plan { border-left: 0; border-top: 1px solid var(--line); }
+    table, thead, tbody, tr, td { display: block; }
+    thead { display: none; }
+    tr { border-top: 1px solid var(--line); padding: 14px 0; }
+    td { border: 0; padding: 2px 0; }
+    td.result { margin-top: 6px; }
+    section { padding: 64px 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav aria-label="Main">
+    <a class="brand" href="#"><img src="icon-256.png" alt="">Tolga</a>
+    <div class="links">
+      <a href="#formats">Formats</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a class="button primary" data-link="downloadUrl" href="#">Download</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <h1>Every movie on your Mac, on your Apple&nbsp;TV.</h1>
+      <p class="lede">MKV, DTS, two languages and a pile of subtitles: Tolga plays them on the big screen in about a second, and you switch them from the couch.</p>
+      <div class="actions">
+        <a class="button primary" data-link="downloadUrl" href="#">Download for Mac</a>
+        <a class="button ghost" href="#pricing">Buy for <span data-text="price">$14.99</span></a>
+      </div>
+      <p class="fine">Free on your Mac. AirPlay free for 14 days. For Apple Silicon Macs with macOS 12 or later.</p>
+    </div>
+
+    <div class="room" id="room" aria-label="Tolga on a Mac sending a movie to an Apple TV" role="img">
+      <div class="tv"><div class="screen"><div class="scene"></div><div class="off"></div></div></div>
+      <div class="mac">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <div class="body">
+          <svg viewBox="0 0 48 40" aria-hidden="true">
+            <rect x="3" y="3" width="42" height="26" rx="4" fill="none" stroke="#8b6cff" stroke-width="2.6"/>
+            <path d="M24 20 L35 37 L13 37 Z" fill="#8b6cff" stroke="#8b6cff" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <div class="playing">Playing on Living Room</div>
+          <div class="file">Mountain.Evening.2160p.mkv</div>
+        </div>
+        <div class="menu">
+          <div class="head">AirPlay</div>
+          <div>This Computer</div>
+          <div class="tv-row">Living Room <span class="tick">✓</span></div>
+        </div>
+        <div class="controls"><span class="play"></span><span class="air"></span><span class="track"></span></div>
+      </div>
+    </div>
+  </header>
+</div>
+
+<section class="formats" id="formats">
+  <div class="wrap">
+    <div class="intro">
+      <h2>MKV and DTS, finally on the Apple TV.</h2>
+      <p>The Apple TV only plays a few kinds of files, and nothing in MKV. Tolga repackages each movie for it while it plays. The picture is sent untouched; only sound the TV can't play is converted, keeping 5.1 surround.</p>
+    </div>
+    <table>
+      <thead><tr><th>Your file</th><th>Video</th><th>Sound</th><th>On the Apple TV</th></tr></thead>
+      <tbody>
+        <tr><td>MKV</td><td>HEVC 4K</td><td>DTS-HD MA 7.1</td><td class="result">Picture as is, Dolby Digital Plus 5.1 to your receiver</td></tr>
+        <tr><td>MKV</td><td>H.264</td><td>Several audio languages</td><td class="result">Every language, switch with the Siri Remote</td></tr>
+        <tr><td>MP4</td><td>H.264</td><td>TrueHD, FLAC, Opus</td><td class="result">Dolby Digital Plus or AAC</td></tr>
+        <tr><td>MKV, MP4</td><td>any of the above</td><td>SRT, ASS or built-in subtitles</td><td class="result">Subtitles you turn on and off from the TV</td></tr>
+        <tr><td>TS, M2TS, AVI</td><td>H.264, HEVC</td><td>AAC, AC-3, E-AC-3</td><td class="result">Plays as is</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Videos in AV1, VP9, MPEG-2 or VC-1 would have to be re-encoded, so Tolga plays them on your Mac only.</p>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="wrap">
+    <h2>A good player first.</h2>
+    <p class="quiet">Tolga is a quiet, quick video player for your Mac. The Apple TV part is one click away.</p>
+    <div class="grid">
+      <div class="feature">
+        <svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+        <h3>Starts in about a second</h3>
+        <p>No waiting while a whole movie is converted. The TV starts right where you paused on the Mac, and jumping ahead takes a moment.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/></svg>
+        <h3>Languages from the couch</h3>
+        <p>Every audio track and subtitle in the file shows up on the TV. Change them with the Siri Remote or in Tolga; both stay in step.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 5 5"/></svg>
+        <h3>Find subtitles</h3>
+        <p>Search OpenSubtitles from the player. Results made for your exact file are marked, and the one you pick appears on the TV too.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="12" rx="2"/><path d="M7 21h10"/><path d="M6 13h4v-4H6z"/></svg>
+        <h3>See before you skip</h3>
+        <p>Hover over the seek bar to see the scene there. Chapters and a playlist that keeps playing on the TV, one movie after another.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24"><path d="M4 20V10M9 20V4M14 20v-7M19 20V8"/></svg>
+        <h3>Sound and timing</h3>
+        <p>A 10-band equalizer, and audio and subtitle delay for downloads that are a little early or late.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/></svg>
+        <h3>Stays in your home</h3>
+        <p>Movies go from your Mac to your TV over your own network. Nothing is uploaded, and there is no account.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="steps">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <ol>
+      <li><h3>Open a movie</h3><p>Drop it on Tolga or open it from Finder. It plays on your Mac.</p></li>
+      <li><h3>Pick your Apple TV</h3><p>Click the AirPlay button and choose the TV. The first time, type the code it shows.</p></li>
+      <li><h3>Watch</h3><p>The movie continues on the TV. Pause, skip and switch languages with the Siri Remote or from your Mac.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="pricing" id="pricing">
+  <div class="wrap">
+    <h2>Pay once, if you use the TV part.</h2>
+    <div class="plans">
+      <div class="plan">
+        <h3>Tolga</h3>
+        <div class="price">Free</div>
+        <div class="per">to play on your Mac</div>
+        <ul>
+          <li>Everything on your Mac, no time limit</li>
+          <li>AirPlay to your Apple TV for 14 days</li>
+          <li>Subtitle search, equalizer, playlists</li>
+        </ul>
+        <a class="button ghost" data-link="downloadUrl" href="#">Download</a>
+      </div>
+      <div class="plan">
+        <h3>Tolga license</h3>
+        <div class="price" data-text="price">$14.99</div>
+        <div class="per">once, no subscription</div>
+        <ul>
+          <li>AirPlay to every Apple TV in your home</li>
+          <li>MKV, DTS and every track on the TV</li>
+          <li>The license key works on all your Macs</li>
+          <li>30-day refund, <a href="refund.html">no questions asked</a></li>
+        </ul>
+        <a class="button primary" data-link="buyUrl" href="#">Buy Tolga</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="list">
+      <details><summary>Which Apple TV do I need?</summary>
+        <p>An Apple TV with tvOS 26 or later, on the same network as your Mac. Tolga finds it on its own.</p></details>
+      <details><summary>Which Macs does it run on?</summary>
+        <p>Macs with Apple Silicon (M1 and later) and macOS 12 or later.</p></details>
+      <details><summary>Does it lower the picture quality?</summary>
+        <p>No. The picture is sent exactly as it is in the file, 4K and all. Only sound the Apple TV can't play, like DTS or TrueHD, is converted, to Dolby Digital Plus with the 5.1 channels kept.</p></details>
+      <details><summary>Are my movies uploaded anywhere?</summary>
+        <p>No. Tolga sends them straight from your Mac to your Apple TV over your home network. There is no account and no cloud.</p></details>
+      <details><summary>What happens after the 14 days?</summary>
+        <p>Tolga keeps playing everything on your Mac for free. Sending to the Apple TV asks for a license key, which you get by email when you buy.</p></details>
+      <details><summary>Can I get my money back?</summary>
+        <p>Yes, within 30 days of buying, no questions asked. Orders are handled by Paddle, our reseller; see the <a href="refund.html">refund policy</a>.</p></details>
+      <details><summary>Is Tolga open source?</summary>
+        <p>The player is, under the Apache License 2.0; its source code is on <a data-link="sourceUrl" href="#">GitHub</a>. AirPlay is a separate, closed-source part of the official app, and that is what a license unlocks.</p></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <a class="brand" href="#"><img src="icon-256.png" alt="">Tolga</a>
+      <div class="links">
+        <a href="terms.html">Terms</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="refund.html">Refunds</a>
+        <a data-link="sourceUrl" href="#">Source code</a>
+        <a data-mail="contact" href="#">Contact</a>
+      </div>
+    </div>
+    <p>Tolga is made by Tolga Çiftciçelik, Istanbul, Türkiye. Orders are processed by Paddle.com, our reseller and Merchant of Record.</p>
+    <p>Apple, Apple TV, AirPlay, Mac and macOS are trademarks of Apple Inc. Tolga is not affiliated with or endorsed by Apple Inc.</p>
+  </div>
+</footer>
+
+<script>
+  for (const a of document.querySelectorAll("[data-link]")) a.href = CONFIG[a.dataset.link];
+  for (const a of document.querySelectorAll("[data-mail]")) { a.href = "mailto:" + CONFIG[a.dataset.mail]; a.textContent = CONFIG[a.dataset.mail]; }
+  for (const el of document.querySelectorAll("[data-text]")) el.textContent = CONFIG[el.dataset.text];
+  // Paddle checkout overlay for every "Buy Tolga" button
+  if (CONFIG.paddleToken && CONFIG.paddlePrice) {
+    const s = document.createElement("script");
+    s.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
+    s.onload = () => {
+      if (CONFIG.paddleToken.startsWith("test_")) Paddle.Environment.set("sandbox");
+      Paddle.Initialize({
+        token: CONFIG.paddleToken,
+        eventCallback: (e) => {
+          if (e.name === "checkout.completed")
+            setTimeout(() => { location.href = "thanks.html?txn=" + encodeURIComponent((e.data && e.data.transaction_id) || ""); }, 1500);
+        },
+      });
+      for (const a of document.querySelectorAll('[data-link="buyUrl"]')) {
+        a.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          Paddle.Checkout.open({ items: [{ priceId: CONFIG.paddlePrice, quantity: 1 }] });
+        });
+      }
+    };
+    document.head.appendChild(s);
+  }
+  // the one moment: the Apple TV gets picked and comes on
+  const room = document.getElementById("room");
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    room.classList.add("boot");
+    setTimeout(() => room.classList.add("pick"), 900);
+    setTimeout(() => room.classList.add("on"), 1700);
+  }
+</script>
+</body>
+</html>

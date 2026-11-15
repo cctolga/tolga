@@ -1,0 +1,693 @@
+// Tolga — a small, good-looking video player.
+// libmpv does the playback, SDL3 gives us a window + GL context, Dear ImGui draws the controls.
+
+#include "tolga/AirPlayApi.h"
+#include "MpvPlayer.h"
+#include "OpenSubtitles.h"
+#include "DurationCache.h"
+#include "Thumbnailer.h"
+#include "MacWindow.h"
+#include "Overlay.h"
+
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_opengl.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <map>
+#include <vector>
+
+#ifndef _WIN32
+#include <csignal>
+#endif
+
+namespace {
+
+// Stands in for the AirPlay module in builds without it: no receivers, never casting.
+class NoAirPlay final : public AirPlay {
+public:
+    void start() override {}
+    void refresh() override {}
+    std::vector<AirPlayTarget> devices() const override { return {}; }
+    bool searching() const override { return false; }
+    bool canCast(const std::string&, const std::vector<CastTrack>&, std::string& reason) const override {
+        reason = "AirPlay is part of the official Tolga app.";
+        return false;
+    }
+    void startCast(const std::string&, const std::string&, double, double, const std::vector<CastTrack>&,
+                   double) override {}
+    double stopCast() override { return 0.0; }
+    void submitPin(const std::string&) override {}
+    void setPaused(bool) override {}
+    void seek(double) override {}
+    void selectAudio(int64_t) override {}
+    void selectSubtitle(int64_t) override {}
+    CastStatus status() const override { return {}; }
+    LicenseInfo license() const override { return {}; }
+    bool castingAllowed() const override { return false; }
+    bool activate(const std::string&, std::string& error) override {
+        error = "This build has no AirPlay.";
+        return false;
+    }
+    void shutdown() override {}
+};
+
+Uint32 g_wakeEvent = 0;  // pushed by mpv threads (new frame / new events)
+Uint32 g_openEvent = 0;  // pushed by the file dialog callback (data1 = strdup'ed path,
+                         // code 0 = open video, 1 = subtitle, 2 = add to the playlist)
+
+void* getProcAddress(void*, const char* name) {
+    return reinterpret_cast<void*>(SDL_GL_GetProcAddress(name));
+}
+
+void pushWake() {
+    SDL_Event e{};
+    e.type = g_wakeEvent;
+    SDL_PushEvent(&e);
+}
+
+void onFileDialog(void* kind, const char* const* files, int) {
+    if (!files || !files[0]) return;  // cancelled or error
+    const int code = int(reinterpret_cast<intptr_t>(kind));
+    for (int i = 0; files[i]; ++i) {
+        SDL_Event e{};
+        e.type = g_openEvent;
+        // several videos picked with "Open": the first replaces what plays, the rest are added
+        e.user.code = (code == 0 && i > 0) ? 2 : code;
+        e.user.data1 = SDL_strdup(files[i]);
+        SDL_PushEvent(&e);
+        if (code == 1) break;
+    }
+}
+
+bool isSubtitleFile(const std::string& path) {
+    const auto dot = path.find_last_of('.');
+    if (dot == std::string::npos) return false;
+    std::string ext = path.substr(dot + 1);
+    for (char& c : ext) c = char(SDL_tolower(c));
+    return ext == "srt" || ext == "ass" || ext == "ssa" || ext == "vtt" || ext == "sub" || ext == "sup";
+}
+
+void showSubtitleDialog(SDL_Window* window) {
+    static const SDL_DialogFileFilter filters[] = {
+        {"Subtitles", "srt;ass;ssa;vtt;sub;sup"},
+        {"All files", "*"},
+    };
+    SDL_ShowOpenFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(1)), window, filters, 2, nullptr, false);
+}
+
+void showOpenDialog(SDL_Window* window, bool add = false) {
+    static const SDL_DialogFileFilter filters[] = {
+        {"Video", "mkv;mp4;m4v;mov;avi;webm;wmv;flv;ts;m2ts;mpg;mpeg;ogv;3gp"},
+        {"All files", "*"},
+    };
+    SDL_ShowOpenFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(add ? 2 : 0)), window, filters, 2,
+                           nullptr, true);
+}
+
+// Resize the window to the video's aspect ratio, fitting within 75% of the screen.
+void fitWindowToVideo(SDL_Window* window, int vw, int vh) {
+    if (vw <= 0 || vh <= 0) return;
+    if (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) return;
+    SDL_Rect usable;
+    if (!SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(window), &usable)) return;
+
+    // dwidth/dheight are in video pixels; on Retina one window point is several pixels,
+    // so we just fit by aspect ratio within the usable area.
+    const float maxW = usable.w * 0.75f, maxH = usable.h * 0.75f;
+    const float scale = std::min({maxW / vw, maxH / vh, 1.0f});
+    const int w = std::max(480, int(vw * scale));
+    const int h = std::max(270, int(w * float(vh) / vw));
+
+    SDL_SetWindowAspectRatio(window, float(vw) / vh, float(vw) / vh);
+    SDL_SetWindowSize(window, w, h);
+    SDL_SetWindowPosition(window, usable.x + (usable.w - w) / 2, usable.y + (usable.h - h) / 2);
+}
+
+}  // namespace
+
+// "audio:1 audio:2 sub:3 ..." - changes when tracks are added (e.g. a subtitle file)
+static std::string trackSignature(const PlayerState& st) {
+    std::string sig;
+    for (const Track& t : st.tracks) sig += t.type + ":" + std::to_string(t.id) + " ";
+    return sig;
+}
+
+static int64_t selectedTrack(const PlayerState& st, const char* type) {
+    // a hidden primary subtitle counts as "off" (that is what the TV should show)
+    if (std::strcmp(type, "sub") == 0 && !st.subVisible) return -1;
+    for (const Track& t : st.tracks)
+        if (t.type == type && t.selected) return t.id;
+    return -1;
+}
+
+int main(int argc, char** argv) {
+#ifndef _WIN32
+    // A TV closing its connection mid-write must not kill the app.
+    std::signal(SIGPIPE, SIG_IGN);
+#endif
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return 1;
+    }
+    g_wakeEvent = SDL_RegisterEvents(2);
+    g_openEvent = g_wakeEvent + 1;
+
+    // macOS only gives a modern GL with a 3.2+ core, forward-compatible profile.
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+
+    SDL_Window* window = SDL_CreateWindow("Tolga", 960, 540,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+    if (!window) {
+        std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        return 1;
+    }
+    SDL_SetWindowMinimumSize(window, 480, 270);
+    macSetupWindow(window);  // transparent title bar over the video (macOS only)
+
+    SDL_GLContext gl = SDL_GL_CreateContext(window);
+    if (!gl) {
+        std::fprintf(stderr, "SDL_GL_CreateContext failed: %s\n", SDL_GetError());
+        return 1;
+    }
+    SDL_GL_MakeCurrent(window, gl);
+    SDL_GL_SetSwapInterval(1);  // vsync
+
+    MpvPlayer player;
+    if (!player.init(getProcAddress, pushWake)) return 1;
+
+    Overlay overlay;
+    if (!overlay.init(window, gl)) return 1;
+
+    // Settings live in the per-user app data folder (~/Library/Application Support/Tolga on
+    // macOS, ~/.local/share/Tolga on Linux, %APPDATA%\Tolga on Windows).
+    std::string configDir;
+    if (char* pref = SDL_GetPrefPath("", "Tolga")) {
+        configDir = pref;
+        SDL_free(pref);
+    }
+
+    // AirPlay comes from the AirPlay module of the official app (see include/tolga/AirPlayApi.h).
+    // Receivers are discovered in the background from the start, so the list is already
+    // filled when the user opens the menu. Without the module the menu points to the app.
+    std::unique_ptr<AirPlay> airplay = createAirPlay(configDir, pushWake);
+    const bool hasAirPlay = airplay != nullptr;
+    if (!airplay) airplay = std::make_unique<NoAirPlay>();
+    airplay->start();
+    std::vector<AirPlayTarget> airplayDevices;
+    std::string castTarget;  // selected AirPlay device ID, empty = this computer
+    LicenseInfo licenseInfo;
+    std::string licenseError;
+
+    OpenSubtitles online(configDir, pushWake);
+    OpenSubtitlesStatus onlineStatus;
+    OpenSubtitlesSettings onlineSettings = online.settings();
+    DurationCache durations(pushWake);
+    Thumbnailer thumbnails(pushWake);
+    overlay.setThumbnails(&thumbnails);
+    std::map<std::string, float> watched;  // how far each file was watched this session (0..1)
+    CastStatus castStatus;
+    CastStatus::Phase lastCastPhase = CastStatus::Phase::Idle;
+    uint64_t lastCastRedraw = 0;
+
+    // Track bookkeeping while casting: which tracks the cast was started with (a new
+    // subtitle file means packaging again), and what was last sent to / heard from the TV.
+    std::string castTrackSig;
+    double   pendingSubDelay = 0.0;       // subtitle delay waiting to be sent to the TV
+    uint64_t subDelayChangedAt = 0;
+    int64_t  castSentAudio = -1, castSentSub = -1;
+    uint64_t castSeenSerial = 0;
+
+    // Starts casting what is loaded locally, from the current position.
+    // startAt < 0: from where the local player is
+    auto startCast = [&](const std::string& deviceId, double startAt = -1.0) {
+        const PlayerState& st = player.state();
+        if (!hasAirPlay) return;
+        if (!airplay->castingAllowed()) {  // official build after the trial: AirPlay needs a license
+            castTarget.clear();
+            licenseError.clear();
+            overlay.openLicenseDialog();
+            return;
+        }
+        std::vector<CastTrack> tracks;
+        for (const Track& t : st.tracks) {
+            tracks.push_back({t.id, t.type, t.ffIndex, t.codec, t.lang, t.title, t.externalFile, t.selected});
+            tracks.back().channels = t.channels;
+        }
+        for (const AirPlayTarget& d : airplayDevices) {
+            if (d.deviceId != deviceId) continue;
+            std::string reason;
+            if (!airplay->canCast(st.path, tracks, reason)) {
+                overlay.showToast(reason);
+                castTarget.clear();
+                return;
+            }
+            castTarget = deviceId;
+            std::fprintf(stderr, "[airplay] casting to %s\n", d.name.c_str());
+            player.setPause(true);
+            castTrackSig = trackSignature(st);
+            castSentAudio = selectedTrack(st, "audio");
+            castSentSub = selectedTrack(st, "sub");
+            castSeenSerial = 0;
+            airplay->startCast(d.deviceId, st.path, startAt >= 0 ? startAt : st.timePos, st.duration, tracks, st.subDelay);
+            return;
+        }
+    };
+    // Back to this computer, continuing where the TV was.
+    auto stopCast = [&](bool resume) {
+        if (!castStatus.active() && castTarget.empty()) return;
+        const double pos = airplay->stopCast();
+        castTarget.clear();
+        castStatus = CastStatus{};
+        if (!player.state().idle) {
+            player.seekAbsolute(pos, true);
+            player.setPause(!resume);
+        }
+    };
+    auto castActive = [&] { return castStatus.active(); };
+
+    // tolga a.mp4 b.mp4 ...: the first plays, the others go into the playlist
+    if (argc > 1) player.load(argv[1]);
+    for (int i = 2; i < argc; ++i) player.append(argv[i]);
+
+    bool running = true;
+    bool fullscreen = false;
+    int  redrawFrames = 2;
+    int  fittedW = 0, fittedH = 0;  // video size the window was last fitted to
+    int  subPos = 100;              // current mpv sub-pos  // ImGui needs a couple of frames to settle after input
+
+    // moving the window by dragging anywhere on the video (like IINA)
+    struct { bool armed = false, moving = false; float mouseX = 0, mouseY = 0; int winX = 0, winY = 0; } winDrag;
+
+    auto toggleFullscreen = [&] {
+        fullscreen = !fullscreen;
+        SDL_SetWindowFullscreen(window, fullscreen);
+    };
+
+    while (running) {
+        // Sleep until something happens. While the controls are fading, or ImGui
+        // still needs frames, poll instead so animations stay smooth (vsync paces us).
+        SDL_Event e;
+        const bool busy = overlay.isAnimating() || redrawFrames > 0;
+        bool gotEvent = busy ? SDL_PollEvent(&e) : SDL_WaitEventTimeout(&e, 100);
+
+        bool newFrame = false;
+        while (gotEvent) {
+            if (e.type == g_wakeEvent) {
+                bool fileLoaded = false;
+                if (!player.processEvents(fileLoaded)) running = false;
+                if (player.hasNewFrame()) newFrame = true;
+                const PlayerState& st = player.state();
+                if (fileLoaded && !castTarget.empty()) {
+                    // a new file was opened while casting: send it to the TV too
+                    const std::string target = castTarget;
+                    player.setPause(true);
+                    startCast(target);
+                }
+                if (fileLoaded) {
+                    player.resetVideoSettings();  // aspect, crop, rotation... start fresh per file
+                    overlay.resetVideoSettings();
+                    fittedW = fittedH = 0;  // new file: fit again once its size is known
+                    SDL_SetWindowTitle(window, st.title.empty() ? "Tolga" : st.title.c_str());
+                }
+                // dwidth/dheight can arrive a little after FILE_LOADED. Fit once per file only:
+                // aspect / crop / rotation changes keep the window and letterbox instead.
+                if (st.videoW > 0 && st.videoH > 0 && fittedW == 0) {
+                    fitWindowToVideo(window, st.videoW, st.videoH);
+                    fittedW = st.videoW;
+                    fittedH = st.videoH;
+                }
+                redrawFrames = std::max(redrawFrames, 1);  // time label etc.
+            } else if (e.type == g_openEvent) {
+                char* path = static_cast<char*>(e.user.data1);
+                if (e.user.code == 1)      player.addSubtitle(path);
+                else if (e.user.code == 2) player.append(path);
+                else                       player.load(path);
+                SDL_free(path);
+            } else {
+                overlay.processEvent(e);
+                redrawFrames = 2;
+
+                switch (e.type) {
+                case SDL_EVENT_QUIT:
+                    running = false;
+                    break;
+                case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+                    fullscreen = false;
+                    macSetupWindow(window);  // SDL rebuilds the window style after fullscreen
+                    break;
+                case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+                    fullscreen = true;
+                    break;
+                case SDL_EVENT_DROP_FILE:
+                    // dropping an .srt onto a playing video adds it as a subtitle
+                    if (isSubtitleFile(e.drop.data) && !player.state().idle)
+                        player.addSubtitle(e.drop.data);
+                    else
+                        player.append(e.drop.data);  // dropped videos join the playlist (and play if idle)
+                    break;
+                case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                    if (e.button.button == SDL_BUTTON_LEFT && e.button.clicks == 2 &&
+                        !overlay.wantsMouse() && !player.state().idle)
+                        toggleFullscreen();
+                    // pressing on the video (not on controls) may start moving the window
+                    if (e.button.button == SDL_BUTTON_LEFT && e.button.clicks == 1 && !overlay.wantsMouse() &&
+                        !fullscreen) {
+                        winDrag.armed = true;
+                        winDrag.moving = false;
+                        SDL_GetGlobalMouseState(&winDrag.mouseX, &winDrag.mouseY);
+                        SDL_GetWindowPosition(window, &winDrag.winX, &winDrag.winY);
+                    }
+                    break;
+                case SDL_EVENT_MOUSE_MOTION:
+                    if (winDrag.armed && (e.motion.state & SDL_BUTTON_LMASK)) {
+                        float mx = 0, my = 0;
+                        SDL_GetGlobalMouseState(&mx, &my);
+                        const float dx = mx - winDrag.mouseX, dy = my - winDrag.mouseY;
+                        // a few pixels of slack so a plain click (or double-click) stays a click
+                        if (!winDrag.moving && dx * dx + dy * dy > 16.0f) winDrag.moving = true;
+                        if (winDrag.moving)
+                            SDL_SetWindowPosition(window, winDrag.winX + int(std::lround(dx)),
+                                                  winDrag.winY + int(std::lround(dy)));
+                    }
+                    break;
+                case SDL_EVENT_MOUSE_BUTTON_UP:
+                    if (e.button.button == SDL_BUTTON_LEFT) {
+                        if (winDrag.moving) {  // land exactly where the mouse let go
+                            float mx = 0, my = 0;
+                            SDL_GetGlobalMouseState(&mx, &my);
+                            SDL_SetWindowPosition(window, winDrag.winX + int(std::lround(mx - winDrag.mouseX)),
+                                                  winDrag.winY + int(std::lround(my - winDrag.mouseY)));
+                        }
+                        winDrag.armed = winDrag.moving = false;
+                    }
+                    break;
+                case SDL_EVENT_KEY_DOWN: {
+                    if (overlay.wantsKeyboard()) break;
+                    overlay.poke();
+                    const bool cmd = (e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL)) != 0;
+                    switch (e.key.key) {
+                    case SDLK_SPACE:
+                        if (castActive()) airplay->setPaused(castStatus.phase != CastStatus::Phase::Paused);
+                        else              player.togglePause();
+                        break;
+                    case SDLK_LEFT:
+                        if (castActive()) airplay->seek(castStatus.position - 5);
+                        else              player.seekRelative(-5);
+                        break;
+                    case SDLK_RIGHT:
+                        if (castActive()) airplay->seek(castStatus.position + 5);
+                        else              player.seekRelative(5);
+                        break;
+                    case SDLK_UP:     player.setVolume(std::min(100.0, player.state().volume + 5)); break;
+                    case SDLK_DOWN:   player.setVolume(std::max(0.0, player.state().volume - 5)); break;
+                    case SDLK_M:      player.toggleMute(); break;
+                    case SDLK_F:      toggleFullscreen(); break;
+                    case SDLK_V:      player.toggleSubVisibility(); break;
+                    case SDLK_J:      player.cycleSubtitle(); break;
+                    case SDLK_O:      if (cmd) showOpenDialog(window); break;
+                    case SDLK_Q:      if (cmd) running = false; break;
+                    case SDLK_ESCAPE:
+                        if (overlay.licenseOpen())       overlay.closeLicenseDialog();
+                        else if (overlay.resultsOpen())  overlay.closeResults();
+                        else if (overlay.panelOpen())    overlay.closePanel();
+                        else if (overlay.playlistOpen()) overlay.closePlaylist();
+                        else if (fullscreen)     toggleFullscreen();
+                        break;
+                    case SDLK_S: if (!cmd) overlay.togglePanel(Overlay::PanelTab::Subtitles); break;
+                    case SDLK_A: if (!cmd) overlay.togglePanel(Overlay::PanelTab::Audio); break;
+                    case SDLK_P: if (!cmd) overlay.togglePlaylist(); break;
+                    case SDLK_N: if (!cmd) player.playNext(); break;
+                    default: break;
+                    }
+                    break;
+                }
+                default:
+                    break;
+                }
+            }
+            gotEvent = SDL_PollEvent(&e);
+        }
+
+        if (!running) break;
+
+        // ---- a subtitle downloaded from OpenSubtitles: add it and show it
+        {
+            std::string lang;
+            const std::string sub = online.takeDownloaded(&lang);
+            if (!sub.empty() && !player.state().idle) {
+                std::string name = sub.substr(sub.find_last_of("/\\") + 1);
+                player.addSubtitle(sub, name, lang);
+                player.setSubVisibility(true);
+                overlay.showToast(online.status().message);
+                overlay.showSubtitleList();
+                redrawFrames = std::max(redrawFrames, 2);
+            }
+        }
+
+        // ---- casting status (updated from the network thread, polled here)
+        castStatus = airplay->status();
+        if (castStatus.phase != lastCastPhase) {
+            using P = CastStatus::Phase;
+            if (castStatus.phase == P::Failed) {
+                overlay.showToast(castStatus.error);
+                stopCast(false);
+            } else if (castStatus.phase == P::Ended) {
+                const std::string name = castStatus.deviceName;
+                if (player.playNext()) {
+                    // next video of the playlist: keep casting (the file-loaded handler sends it)
+                    overlay.showToast("Playing the next video on " + name + ".");
+                    watched[player.state().path] = 1.0f;
+                } else {
+                    overlay.showToast("Finished playing on " + name + ".");
+                    airplay->stopCast();
+                    castTarget.clear();
+                    castStatus = CastStatus{};
+                    if (!player.state().idle) player.seekAbsolute(0, true);  // stay paused at the start
+                }
+            }
+            lastCastPhase = castStatus.phase;
+            redrawFrames = std::max(redrawFrames, 1);
+        }
+        // ---- keep audio/subtitle tracks in step between Tolga and the TV
+        if (castStatus.active() && !castTarget.empty()) {
+            const PlayerState& pst = player.state();
+            using P = CastStatus::Phase;
+            const bool live = castStatus.phase == P::Playing || castStatus.phase == P::Paused;
+            if (!pst.idle && trackSignature(pst) != castTrackSig && (live || castStatus.phase == P::Loading)) {
+                // a subtitle file was added: package again and continue on the TV where it is
+                std::fprintf(stderr, "[airplay] tracks changed, sending the video again\n");
+                const double pos = castStatus.position;
+                const std::string target = castTarget;
+                player.seekAbsolute(pos, true);
+                startCast(target, pos);
+            } else if (castStatus.hls && live && std::abs(pst.subDelay - castStatus.subtitleDelay) > 0.05) {
+                // Subtitle delay on the TV: its subtitles are rewritten with the new timing and
+                // the video is sent again from where it is. Wait until the slider rests first.
+                if (std::abs(pst.subDelay - pendingSubDelay) > 0.001) {
+                    pendingSubDelay = pst.subDelay;
+                    subDelayChangedAt = SDL_GetTicks();
+                } else if (SDL_GetTicks() - subDelayChangedAt > 700) {
+                    std::fprintf(stderr, "[airplay] subtitle delay %.1f s, sending the video again\n", pst.subDelay);
+                    const double pos = castStatus.position;
+                    const std::string target = castTarget;
+                    player.seekAbsolute(pos, true);
+                    overlay.showToast("Updating subtitle timing on " + castStatus.deviceName + "...");
+                    startCast(target, pos);
+                }
+                redrawFrames = std::max(redrawFrames, 1);
+            } else if (castStatus.hls && live) {
+                if (castStatus.selectionSerial != castSeenSerial) {
+                    // the TV reports its tracks (e.g. changed with the Siri remote): mirror them here
+                    castSeenSerial = castStatus.selectionSerial;
+                    castSentAudio = castStatus.tvAudio;
+                    castSentSub = castStatus.tvSub;
+                    if (castStatus.tvAudio >= 0 && castStatus.tvAudio != selectedTrack(pst, "audio"))
+                        player.selectAudio(castStatus.tvAudio);
+                    if (castStatus.tvSub != selectedTrack(pst, "sub")) {
+                        player.selectSubtitle(castStatus.tvSub);
+                        if (castStatus.tvSub >= 0 && !pst.subVisible) player.setSubVisibility(true);
+                    }
+                } else {
+                    const int64_t aid = selectedTrack(pst, "audio"), sid = selectedTrack(pst, "sub");
+                    if (aid != castSentAudio && aid >= 0) { airplay->selectAudio(aid); castSentAudio = aid; }
+                    if (sid != castSentSub)               { airplay->selectSubtitle(sid); castSentSub = sid; }
+                }
+            }
+        }
+
+        // keep the time label ticking while the TV plays (a few times per second is plenty)
+        if (castStatus.active() && SDL_GetTicks() - lastCastRedraw >= 250) {
+            lastCastRedraw = SDL_GetTicks();
+            redrawFrames = std::max(redrawFrames, 1);
+        }
+
+        if (!newFrame && redrawFrames <= 0 && !overlay.isAnimating()) continue;
+        if (redrawFrames > 0) --redrawFrames;
+
+        // ---- render: video first, controls on top
+        int fbw = 0, fbh = 0;
+        SDL_GetWindowSizeInPixels(window, &fbw, &fbh);
+        glViewport(0, 0, fbw, fbh);
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        const PlayerState& st = player.state();
+        if (!st.idle) player.render(0, fbw, fbh);
+
+        airplayDevices = airplay->devices();
+        licenseInfo = airplay->license();
+        AirPlayView apView{&airplayDevices, airplay->searching(), castTarget, &castStatus};
+        apView.available = hasAirPlay;
+        apView.license = hasAirPlay ? &licenseInfo : nullptr;
+        apView.licenseError = licenseError;
+        onlineStatus = online.status();
+        OnlineView onlineView{&onlineStatus, &onlineSettings, OpenSubtitles::queryFromFileName(st.path)};
+        // seek-bar previews: start once the file's length and picture size are known
+        if (!st.idle && st.duration > 0 && st.videoW > 0) thumbnails.start(st.path, st.duration, st.videoW, st.videoH);
+        else if (st.idle) thumbnails.clear();
+
+        PlaylistView playlistView;
+        if (!st.idle && st.duration > 0) {
+            durations.set(st.path, st.duration);
+            const double pos = castStatus.active() ? castStatus.position : st.timePos;
+            watched[st.path] = float(std::clamp(pos / st.duration, 0.0, 1.0));
+        }
+        for (const PlaylistEntry& e : st.playlist) {
+            playlistView.durations.push_back(durations.get(e.path));
+            auto w = watched.find(e.path);
+            playlistView.progress.push_back(w == watched.end() ? 0.0f : w->second);
+        }
+#ifdef __APPLE__
+        overlay.setTitlebarOverlay(true, fullscreen);
+#endif
+        OverlayActions act = overlay.draw(st, fullscreen, apView, onlineView, playlistView);
+        if (act.openLicense) { licenseError.clear(); overlay.openLicenseDialog(); }
+        if (act.closeLicense) overlay.closeLicenseDialog();
+        if (act.openBuyPage) {
+            const std::string url = hasAirPlay ? licenseInfo.buyUrl : std::string(TOLGA_WEBSITE);
+            if (!url.empty()) SDL_OpenURL(url.c_str());
+        }
+        if (act.activateLicense) {
+            if (airplay->activate(act.licenseKey, licenseError)) {
+                overlay.closeLicenseDialog();
+                overlay.showToast("Thank you! Tolga is licensed to " + airplay->license().email + ".");
+            }
+        }
+        // the title bar buttons fade together with the controls
+        macSetTitlebarAlpha(window, overlay.controlsAlpha());
+        overlay.render();
+        SDL_GL_SwapWindow(window);
+        player.reportSwap();
+
+        // hide the mouse cursor together with the controls during playback
+        if (overlay.controlsHidden() && !st.idle) SDL_HideCursor();
+        else                                      SDL_ShowCursor();
+
+        // ---- apply what the user did in the overlay
+        if (act.togglePause) {
+            if (castActive()) airplay->setPaused(castStatus.phase != CastStatus::Phase::Paused);
+            else              player.togglePause();
+        }
+        if (act.toggleMute)        player.toggleMute();
+        if (act.toggleFullscreen)  toggleFullscreen();
+        if (act.openFile)          showOpenDialog(window);
+        if (act.seekRelative != 0) {
+            if (castActive()) airplay->seek(castStatus.position + act.seekRelative);
+            else              player.seekRelative(act.seekRelative);
+        }
+        if (act.seekAbsolute) {
+            // the TV gets one seek when the bar is released, not a stream while dragging
+            if (castActive()) { if (act.seekExact) airplay->seek(act.seekTo); }
+            else              player.seekAbsolute(act.seekTo, act.seekExact);
+        }
+        if (act.airplayMenuOpened) airplay->refresh();
+        if (act.selectCastTarget) {
+            if (act.castTarget.empty())               stopCast(true);
+            else if (act.castTarget != castTarget ||
+                     !castActive())                   startCast(act.castTarget);
+        }
+        if (act.submitPin) airplay->submitPin(act.pin);
+        if (act.cancelPin) stopCast(false);
+        if (act.loadSubFile)       showSubtitleDialog(window);
+        if (act.selectSub)         player.selectSubtitle(act.subId);
+        if (act.selectAudio)       player.selectAudio(act.audioId);
+        if (act.selectSecondarySub)  player.selectSecondarySubtitle(act.secondarySubId);
+        if (act.setSubVisible)       player.setSubVisibility(act.subVisible);
+        if (act.setSecondaryVisible) player.setSecondarySubVisibility(act.secondaryVisible);
+        if (act.selectVideo)         player.selectVideo(act.videoId);
+        if (act.setAudioDelay)       player.setAudioDelay(act.audioDelay);
+        if (act.setSpeed)            player.setSpeed(act.speed);
+        if (act.setAspect)           player.setAspect(act.aspect);
+        if (act.setCrop)             player.setCrop(act.crop);
+        if (act.setRotate)           player.setRotate(act.rotate);
+        if (act.setHwdec)            player.setHardwareDecoding(act.hwdec);
+        if (act.pictureProperty)     player.setPicture(act.pictureProperty, act.pictureValue);
+        if (act.setSubDelay)         player.setSubDelay(act.subDelay);
+        if (act.setEqualizer)        player.setEqualizer(act.eqGains);
+        if (act.playlistPlay >= 0)   player.playIndex(act.playlistPlay);
+        if (act.playlistRemove >= 0) player.removeIndex(act.playlistRemove);
+        if (act.playlistClear)       player.clearPlaylist();
+        if (act.playlistAdd)         showOpenDialog(window, true);
+        if (act.playlistMoveFrom >= 0) player.movePlaylistEntry(act.playlistMoveFrom, act.playlistMoveTo);
+        if (act.playlistSort)        player.sortPlaylistByName();
+        if (act.toggleShuffle)       player.setShuffle(!st.shuffled);
+        if (act.cycleRepeat) {
+            // off -> whole playlist -> this video -> off
+            if (!st.loopFile && !st.loopPlaylist) player.setRepeat(false, true);
+            else if (st.loopPlaylist)             player.setRepeat(true, false);
+            else                                  player.setRepeat(false, false);
+        }
+        if (act.seekChapter >= 0) {
+            if (castActive() && act.seekChapter < int(st.chapters.size())) airplay->seek(st.chapters[size_t(act.seekChapter)].time);
+            else                                                            player.seekChapter(act.seekChapter);
+        }
+        if (act.onlineSaveSettings) {
+            onlineSettings.apiKey = act.onlineApiKey;
+            onlineSettings.username = act.onlineUser;
+            onlineSettings.password = act.onlinePassword;
+            online.saveSettings(onlineSettings);
+        }
+        if (act.onlineSearch) {
+            onlineSettings.languages = act.onlineLanguages;  // remembered for next time
+            online.saveSettings(onlineSettings);
+            // the hash only works for local files
+            const bool local = st.path.find("://") == std::string::npos;
+            online.search(local ? st.path : std::string(), act.onlineQuery, act.onlineLanguages);
+        }
+        if (act.onlineDownload >= 0 && act.onlineDownload < int(onlineStatus.results.size()))
+            online.download(onlineStatus.results[size_t(act.onlineDownload)]);
+
+        // Lift subtitles above the control bar while it is shown, like IINA does.
+        int wantPos = 100;
+        if (overlay.controlsShown() && !st.idle) {
+            int winW = 0, winH = 0;
+            SDL_GetWindowSize(window, &winW, &winH);
+            if (winH > 0) wantPos = std::clamp(100 - int(100.0f * Overlay::controlsHeight() / winH), 50, 100);
+        }
+        if (wantPos != subPos) {
+            player.setSubPos(wantPos);
+            subPos = wantPos;
+        }
+        if (act.setVolume) {
+            player.setVolume(act.volume);
+            if (st.muted) player.setMute(false);
+        }
+    }
+
+    airplay->shutdown();
+    overlay.shutdown();
+    player.shutdown();  // needs the GL context still alive
+    SDL_GL_DestroyContext(gl);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 0;
+}
