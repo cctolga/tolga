@@ -134,6 +134,12 @@
   td:first-child { font-weight: 700; white-space: nowrap; }
   td.result { color: var(--screen); }
   .note { margin-top: 18px; font-size: 15px; color: var(--mist); }
+  .playall { margin-top: 56px; padding-top: 34px; border-top: 1px solid var(--line); }
+  .playall h3 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 22px; }
+  .playall dl { display: grid; grid-template-columns: 130px 1fr; gap: 14px 24px; margin: 0; font-size: 17px; }
+  .playall dt { color: var(--glow); font-weight: 600; }
+  .playall dd { margin: 0; color: var(--paper); line-height: 1.5; }
+  @media (max-width: 720px) { .playall dl { grid-template-columns: 1fr; gap: 2px; } .playall dd { margin-bottom: 14px; } }
 
   /* ---------- features ---------- */
   .features .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 44px 40px; margin-top: 40px; }
@@ -290,6 +296,16 @@
       </tbody>
     </table>
     <p class="note">Videos in AV1, VP9, MPEG-2 or VC-1 would have to be re-encoded, so Tolga Player plays them on your computer only.</p>
+
+    <div class="playall">
+      <h3>On your computer, it plays almost anything.</h3>
+      <dl>
+        <dt>Files</dt><dd>MKV, MP4, MOV, M4V, AVI, WebM, TS, M2TS, MTS, VOB, MPG, FLV, WMV, OGV, 3GP, and audio files</dd>
+        <dt>Video</dt><dd>H.264, HEVC (also 10-bit), AV1, VP9, VP8, MPEG-2, MPEG-4 (DivX, Xvid), VC-1, WMV, ProRes, Theora, MJPEG</dd>
+        <dt>Sound</dt><dd>AAC, MP3, AC-3, E-AC-3, DTS, DTS-HD MA, TrueHD, FLAC, ALAC, Opus, Vorbis, WMA, PCM</dd>
+        <dt>Subtitles</dt><dd>SRT, ASS/SSA, WebVTT, MP4 text, Blu-ray (PGS), DVD (VobSub) and DVB, built in or in a separate file</dd>
+      </dl>
+    </div>
   </div>
 </section>
 
