@@ -127,7 +127,7 @@ void roundedTriangle(ImDrawList* dl, ImVec2 a, ImVec2 b, ImVec2 c, float r, ImU3
 
 // AirPlay video glyph: a rounded screen, open at the bottom, with a solid triangle rising into it.
 void iconAirPlay(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
-    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.35f, 0.62f, 1.0f, 1.0f)) : color;
+    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.18f, 0.80f, 0.76f, 1.0f)) : color;
     const float w = s * 0.58f, top = c.y - s * 0.46f, bot = c.y + s * 0.20f;
     const float r = s * 0.11f, t = 1.7f, gap = s * 0.30f;
     dl->PathLineTo({c.x - gap, bot});
@@ -143,7 +143,7 @@ void iconAirPlay(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
 }
 
 void iconGear(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
-    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.35f, 0.62f, 1.0f, 1.0f)) : color;
+    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.18f, 0.80f, 0.76f, 1.0f)) : color;
     const float r = s * 0.36f, tooth = s * 0.13f;
     for (int i = 0; i < 8; ++i) {  // eight teeth
         const float ang = i * 3.14159265f / 4.0f;
@@ -155,7 +155,7 @@ void iconGear(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
 }
 
 void iconPlaylist(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
-    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.35f, 0.62f, 1.0f, 1.0f)) : color;
+    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.18f, 0.80f, 0.76f, 1.0f)) : color;
     const float w = s * 0.5f;
     for (int i = 0; i < 3; ++i) {
         const float y = c.y - s * 0.28f + i * s * 0.28f;
@@ -243,6 +243,11 @@ bool Overlay::init(SDL_Window* window, SDL_GLContext gl) {
     style.Colors[ImGuiCol_Separator] = ImVec4(1, 1, 1, 0.10f);
     style.Colors[ImGuiCol_TextDisabled] = ImVec4(1, 1, 1, 0.45f);
     style.Colors[ImGuiCol_CheckMark] = ImVec4(1, 1, 1, 0.95f);
+    // Tolga Player's turquoise instead of ImGui's default blue
+    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.18f, 0.80f, 0.76f, 1.0f);
+    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.30f, 0.88f, 0.84f, 1.0f);
+    style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.18f, 0.80f, 0.76f, 0.35f);
+    style.Colors[ImGuiCol_NavHighlight] = ImVec4(0.18f, 0.80f, 0.76f, 1.0f);
     style.PopupRounding = 12.0f;
     style.PopupBorderSize = 1.0f;
     style.ItemSpacing = {8, 4};
@@ -474,9 +479,9 @@ void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {
     ImGui::PopStyleColor(3);
     ImGui::SameLine(0, 10);
     const bool ready = std::strlen(m_pinBuf) == 4 && !checking;
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.52f, 0.98f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.32f, 0.58f, 1.0f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.45f, 0.90f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.62f, 0.60f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.11f, 0.70f, 0.67f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.52f, 0.51f, 1.0f));
     ImGui::BeginDisabled(!ready);
     if ((ImGui::Button(checking ? "Checking..." : "Pair", bsz) || enter) && ready) {
         out.submitPin = true;
@@ -581,9 +586,9 @@ void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out)
     if (!licensed) {
         ImGui::SameLine(0, 10);
         const bool ready = m_licenseBuf[0] != 0;
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.52f, 0.98f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.32f, 0.58f, 1.0f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.45f, 0.90f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.62f, 0.60f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.11f, 0.70f, 0.67f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.52f, 0.51f, 1.0f));
         ImGui::BeginDisabled(!ready);
         if ((ImGui::Button("Activate", bsz) || enter) && ready) {
             out.activateLicense = true;
@@ -944,7 +949,7 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
 
 namespace {
 
-constexpr ImU32 kAccent = IM_COL32(64, 132, 255, 255);
+constexpr ImU32 kAccent = IM_COL32(34, 196, 186, 255);
 
 // ISO 639-2 codes (what files and mpv use) -> English names for the language badges.
 std::string languageName(const std::string& code) {
@@ -1504,7 +1509,7 @@ int segmented(const char* id, const char* const* labels, int count, int selected
         if (ImGui::InvisibleButton("##seg", {w, h})) clicked = i;
         const bool hov = ImGui::IsItemHovered();
         ImGui::PopID();
-        if (i == selected)  dl->AddRectFilled({x, pos.y}, {x + w, pos.y + h}, IM_COL32(64, 132, 255, 255), 7.0f);
+        if (i == selected)  dl->AddRectFilled({x, pos.y}, {x + w, pos.y + h}, IM_COL32(34, 196, 186, 255), 7.0f);
         else if (hov)       dl->AddRectFilled({x, pos.y}, {x + w, pos.y + h}, IM_COL32(255, 255, 255, 18), 7.0f);
         if (i > 0 && i != selected && i - 1 != selected)
             dl->AddLine({x, pos.y + 8}, {x, pos.y + h - 8}, IM_COL32(255, 255, 255, 50));
@@ -1818,7 +1823,7 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
             if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0, 6.0f)) m_dragFrom = i;
             ImGui::PopID();
             const bool sel = m_playlistSelected == i;
-            if (sel)      ld->AddRectFilled(a, b, IM_COL32(64, 132, 255, 70));
+            if (sel)      ld->AddRectFilled(a, b, IM_COL32(34, 196, 186, 70));
             else if (hov) ld->AddRectFilled(a, b, IM_COL32(255, 255, 255, 12));
             ld->AddLine({a.x, b.y - 0.5f}, {b.x, b.y - 0.5f}, IM_COL32(255, 255, 255, 14));
 
@@ -1836,7 +1841,7 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
             // watched so far (IINA draws it under the row)
             const float prog = i < int(pl.progress.size()) ? pl.progress[size_t(i)] : 0.0f;
             if (prog > 0.0f)
-                ld->AddRectFilled({a.x, b.y - 3}, {a.x + rw * std::min(prog, 1.0f), b.y - 1}, IM_COL32(64, 132, 255, 255));
+                ld->AddRectFilled({a.x, b.y - 3}, {a.x + rw * std::min(prog, 1.0f), b.y - 1}, IM_COL32(34, 196, 186, 255));
 
             // where a dragged row would land
             if (m_dragFrom >= 0) {
@@ -1849,7 +1854,7 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
             if (dropAt < 0) dropAt = my < ImGui::GetWindowPos().y + 4 ? 0 : n;
             const float ly = ImGui::GetWindowPos().y + dropAt * rowH - ImGui::GetScrollY();
             ld->AddLine({ImGui::GetWindowPos().x + 8, ly}, {ImGui::GetWindowPos().x + rw - 8, ly},
-                        IM_COL32(64, 132, 255, 255), 2.0f);
+                        IM_COL32(34, 196, 186, 255), 2.0f);
             if (!ImGui::IsMouseDown(0)) {
                 if (dropAt != m_dragFrom && dropAt != m_dragFrom + 1) {
                     out.playlistMoveFrom = m_dragFrom;
@@ -2062,7 +2067,7 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
             }
             ImGui::PopID();
             const bool sel = m_selectedResult == int(i);
-            if (sel)      ld->AddRectFilled({a.x + 6, a.y}, {b.x - 6, b.y}, IM_COL32(64, 132, 255, 90), 8.0f);
+            if (sel)      ld->AddRectFilled({a.x + 6, a.y}, {b.x - 6, b.y}, IM_COL32(34, 196, 186, 90), 8.0f);
             else if (hov) ld->AddRectFilled({a.x + 6, a.y}, {b.x - 6, b.y}, IM_COL32(255, 255, 255, 12), 8.0f);
 
             // line 1 (small, grey): language (year) fps  [down-arrow] downloads ... date
