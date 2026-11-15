@@ -123,7 +123,8 @@ struct OnlineView {
 // idle/drop screen and fullscreen title bar.
 class Overlay {
 public:
-    bool init(SDL_Window* window, SDL_GLContext gl);
+    // `glslVersion`: shader version for the GL context in use ("#version 150" for GL 3.2, "#version 120" for 2.1)
+    bool init(SDL_Window* window, SDL_GLContext gl, const char* glslVersion);
     void shutdown();
 
     // Forwards an SDL event to ImGui. Mouse motion also counts as activity
@@ -264,6 +265,7 @@ private:
     bool        m_licenseOpen = false;
     AboutInfo   m_about;
     std::string m_licenseReflowed;  // license text with its hard line breaks joined into paragraphs
+    std::string m_creditsReflowed;  // the same for the third-party notices
     bool        m_aboutOpen = false;
     int         m_aboutTab = 0;  // 0 license, 1 credits
     bool        m_licenseFirstFrame = false;

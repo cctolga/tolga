@@ -5,3 +5,5 @@ dist/
 build-release/
 license-public.key
 *.pem
+build-appimage/
+.DS_Store

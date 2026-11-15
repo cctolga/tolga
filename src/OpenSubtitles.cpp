@@ -226,6 +226,30 @@ std::string OpenSubtitles::movieHash(const std::string& path) {
     return out;
 }
 
+namespace {
+// curl handle that trusts the system's certificates. The Linux build carries its own curl, which
+// doesn't know where this distribution keeps them, so look in the usual places.
+CURL* newCurl() {
+    CURL* c = curl_easy_init();
+#if defined(__linux__)
+    if (c) {
+        static const char* const bundle = [] () -> const char* {
+            if (const char* env = std::getenv("SSL_CERT_FILE")) return env;
+            for (const char* p : {"/etc/ssl/certs/ca-certificates.crt",                 // Debian, Ubuntu, Arch, Gentoo
+                                  "/etc/pki/tls/certs/ca-bundle.crt",                   // Fedora, RHEL
+                                  "/etc/ssl/ca-bundle.pem",                             // openSUSE
+                                  "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",  // newer RHEL
+                                  "/etc/ssl/cert.pem"})                                 // Alpine, Void
+                if (FILE* f = std::fopen(p, "rb")) { std::fclose(f); return p; }
+            return nullptr;
+        }();
+        if (bundle) curl_easy_setopt(c, CURLOPT_CAINFO, bundle);
+    }
+#endif
+    return c;
+}
+}  // namespace
+
 std::string OpenSubtitles::apiBase() const {
     if (const char* env = std::getenv("TOLGA_OPENSUBTITLES_URL")) return env;  // tests
     return m_baseUrl.empty() ? kDefaultApi : m_baseUrl;
@@ -234,7 +258,7 @@ std::string OpenSubtitles::apiBase() const {
 OpenSubtitles::Reply OpenSubtitles::request(const std::string& method, const std::string& url,
                                             const std::string& body, bool auth) {
     Reply r;
-    CURL* c = curl_easy_init();
+    CURL* c = newCurl();
     if (!c) {
         r.error = "network unavailable";
         return r;
@@ -472,7 +496,7 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
 
         // the link points at a plain file server; no API headers needed
         std::string data;
-        CURL* c = curl_easy_init();
+        CURL* c = newCurl();
         curl_easy_setopt(c, CURLOPT_URL, link.c_str());
         curl_easy_setopt(c, CURLOPT_USERAGENT, kUserAgent);
         curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);

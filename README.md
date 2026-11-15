@@ -12,6 +12,21 @@ cmake --build build -j
 ./build/tolga ~/Movies/some-video.mkv
 ```
 
+## Build on Linux
+
+```sh
+# Debian/Ubuntu (other distributions: the same packages under their names)
+sudo apt install build-essential cmake ninja-build pkg-config libmpv-dev libcurl4-openssl-dev \
+     libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxkbcommon-dev \
+     libwayland-dev wayland-protocols libdecor-0-dev libegl-dev libasound2-dev libpulse-dev
+cmake -S . -B build
+cmake --build build -j
+./build/tolga ~/Videos/some-video.mkv
+```
+
+The distribution's mpv is a GPL build: fine for your own use, but a build you give to others
+uses the LGPL libraries below (`scripts/make-appimage.sh`).
+
 ## Release build (Tolga Player.app + .dmg)
 
 The development build above uses Homebrew's mpv and ffmpeg. Those are GPL builds, so they
@@ -38,6 +53,21 @@ TOLGA_SIGN_ID="Developer ID Application: Your Name (TEAMID)" \
 TOLGA_NOTARY_PROFILE=tolga-notary scripts/make-app.sh
 ```
 
+### Linux AppImage
+
+```sh
+# Ubuntu 22.04 or newer, plus the packages listed at the top of scripts/build-deps.sh
+scripts/build-deps.sh      # once: the same LGPL libraries, plus a static curl (HTTPS only)
+scripts/make-appimage.sh   # dist/Tolga-Player-<version>-x86_64.AppImage
+```
+
+The AppImage carries its libraries in `usr/lib`; only what must match the user's system
+(C/C++ runtime, graphics drivers, X11/Wayland, ALSA/PulseAudio, fontconfig) comes from
+the distribution. It runs on distributions with the same or a newer glibc than the build
+machine, so release builds are made on Ubuntu 22.04 by `.github/workflows/linux.yml`:
+a tag `v*` attaches `Tolga-Player-<version>-x86_64.AppImage` (and a copy named
+`Tolga-Player-x86_64.AppImage` for the website's download link) to that release.
+
 Other knobs: `TOLGA_BUY_URL` (shop page behind "Buy Tolga"), `TOLGA_SOURCE_URL` (where the
 source is, for the notices), `TOLGA_BUNDLE_ID` (default `app.tolga.player`), `MACOSX_DEPLOYMENT_TARGET`
 (default 12.0; set it before `build-deps.sh` too), `TOLGA_BUILD_NUMBER`.
@@ -48,13 +78,13 @@ The Tolga player is open source under the Apache License 2.0 (`LICENSE`, `NOTICE
 Anyone may build, use, change and share it, also in their own products.
 
 AirPlay (playing on an Apple TV) is a separate, **closed-source** module. The player only
-talks to it through `include/tolga/AirPlayApi.h`. On macOS, CMake downloads the prebuilt
-module (`libtolga_airplay.dylib`, Apple Silicon + Intel) from this repository's releases and
-checks it against the SHA-256 in `cmake/AirPlayPrebuilt.cmake`. AirPlay then works for
+talks to it through `include/tolga/AirPlayApi.h`. On macOS and Linux x86_64, CMake downloads
+the prebuilt module (`libtolga_airplay.dylib`, Apple Silicon + Intel; `libtolga_airplay.so`)
+from this repository's releases and checks it against the SHA-256 in `cmake/AirPlayPrebuilt.cmake`. AirPlay then works for
 14 days and afterwards needs a Tolga license (https://cctolga.github.io/tolga/).
 
-- `-DTOLGA_AIRPLAY_PREBUILT=OFF` builds without AirPlay (also the case on Linux and
-  Windows for now); the AirPlay menu then points to the official app.
+- `-DTOLGA_AIRPLAY_PREBUILT=OFF` builds without AirPlay (also the case on Windows for now,
+  and on Linux until the Linux module is published); the AirPlay menu then points to the official app.
 - The download happens once per build folder; offline, the build continues without AirPlay.
 
 ## Controls
@@ -162,7 +192,8 @@ the daily download limit. The settings are stored in
 `opensubtitles.json` in the app data folder, readable only by your user; downloaded
 subtitles go to its `Subtitles/` folder.
 
-Building needs libcurl (included with macOS; on Linux `libcurl4-openssl-dev`).
+Building needs libcurl (included with macOS; on Linux `libcurl4-openssl-dev`, or the static
+one from `scripts/build-deps.sh`).
 
 ## Troubleshooting
 

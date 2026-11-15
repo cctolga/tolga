@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.tolga.player</id>
+  <name>Tolga Player</name>
+  <summary>Play videos and send them to an Apple TV</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary AND Apache-2.0</project_license>
+  <developer id="io.github.cctolga">
+    <name>Tolga Çiftciçelik</name>
+  </developer>
+  <description>
+    <p>A simple video player built on mpv. It plays nearly every format, finds subtitles
+    online, and sends what you're watching to an Apple TV over AirPlay, with the subtitles
+    you picked.</p>
+  </description>
+  <launchable type="desktop-id">app.tolga.player.desktop</launchable>
+  <url type="homepage">https://cctolga.github.io/tolga/</url>
+  <url type="vcs-browser">https://github.com/cctolga/tolga</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

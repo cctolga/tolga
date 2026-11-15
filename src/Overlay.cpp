@@ -220,7 +220,7 @@ const char* findSystemFont() {
 
 // ================================================================== setup
 
-bool Overlay::init(SDL_Window* window, SDL_GLContext gl) {
+bool Overlay::init(SDL_Window* window, SDL_GLContext gl, const char* glslVersion) {
     m_window = window;
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -255,11 +255,7 @@ bool Overlay::init(SDL_Window* window, SDL_GLContext gl) {
     style.ItemSpacing = {8, 4};
 
     if (!ImGui_ImplSDL3_InitForOpenGL(window, gl)) return false;
-#ifdef __APPLE__
-    if (!ImGui_ImplOpenGL3_Init("#version 150")) return false;
-#else
-    if (!ImGui_ImplOpenGL3_Init("#version 330")) return false;
-#endif
+    if (!ImGui_ImplOpenGL3_Init(glslVersion)) return false;
     m_lastActivity = m_lastFrame = SDL_GetTicks();
     return true;
 }
@@ -536,30 +532,54 @@ void drawAppIcon(ImDrawList* dl, ImVec2 o, float s) {
 }
 }  // namespace
 
-void Overlay::setAbout(AboutInfo info) {
-    m_about = std::move(info);
-    // License files are wrapped at ~80 columns; join each paragraph so it wraps to the dialog.
-    std::string out, para;
-    std::istringstream in(m_about.licenseText);
-    std::string line;
+namespace {
+// Text files are wrapped at ~80 columns; join the lines of each paragraph so the text wraps
+// to the dialog. Paragraphs (blank-line separated) stay apart. `license`: a numbered clause
+// or "(a)" item starts a new paragraph. Otherwise table rows (two spaces inside the line) and
+// indented commands keep their own lines, as does the line after one ending in ':'.
+std::string reflowText(const std::string& text, bool license) {
+    std::string out, block;
+    bool lineBreak = false;  // next line goes on a new line of the same block
     auto flush = [&] {
-        if (para.empty()) return;
+        if (block.empty()) return;
         if (!out.empty()) out += "\n\n";
-        out += para;
-        para.clear();
+        out += block;
+        block.clear();
     };
+    std::istringstream in(text);
+    std::string line;
     while (std::getline(in, line)) {
-        size_t b = line.find_first_not_of(" \t\r");
-        if (b == std::string::npos) { flush(); continue; }
-        size_t e = line.find_last_not_of(" \t\r");
-        std::string t = line.substr(b, e - b + 1);
-        // a numbered clause or "(a)" item starts its own paragraph
-        if (!para.empty() && (std::isdigit((unsigned char)t[0]) || t[0] == '(')) flush();
-        if (!para.empty()) para += ' ';
-        para += t;
+        const size_t b = line.find_first_not_of(" \t\r");
+        if (b == std::string::npos) { flush(); lineBreak = false; continue; }
+        const size_t e = line.find_last_not_of(" \t\r");
+        const std::string t = line.substr(b, e - b + 1);
+        if (license) {
+            if (!block.empty() && (std::isdigit((unsigned char)t[0]) || t[0] == '(')) flush();
+            if (!block.empty()) block += ' ';
+            block += t;
+            continue;
+        }
+        const bool row = t.find("  ") != std::string::npos || b >= 4;
+        std::string r = t;
+        if (row) {  // columns padded for a fixed-width font: two spaces between them is enough here
+            r.clear();
+            for (char ch : t)
+                if (!(ch == ' ' && r.size() >= 2 && r[r.size() - 1] == ' ' && r[r.size() - 2] == ' ')) r += ch;
+        }
+        if (block.empty())               block = r;
+        else if (row || lineBreak)       block += "\n" + r;
+        else                             block += ' ' + r;
+        lineBreak = row || t.back() == ':';
     }
     flush();
-    m_licenseReflowed = out;
+    return out;
+}
+}  // namespace
+
+void Overlay::setAbout(AboutInfo info) {
+    m_about = std::move(info);
+    m_licenseReflowed = reflowText(m_about.licenseText, true);
+    m_creditsReflowed = reflowText(m_about.creditsText, false);
 }
 
 void Overlay::drawAbout(const AirPlayView& airplay, OverlayActions& out) {
@@ -649,7 +669,7 @@ void Overlay::drawAbout(const AirPlayView& airplay, OverlayActions& out) {
     ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 8.0f);
     ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0, 0, 0, 0));
     ImGui::BeginChild(m_aboutTab == 0 ? "##about_license" : "##about_credits", {dlg.x - leftW - 36.0f, dlg.y - 40.0f});
-    const std::string& text = m_aboutTab == 0 ? m_licenseReflowed : m_about.creditsText;
+    const std::string& text = m_aboutTab == 0 ? m_licenseReflowed : m_creditsReflowed;
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.78f));
     ImGui::PushTextWrapPos(0.0f);
     if (text.empty()) ImGui::TextUnformatted(m_aboutTab == 0 ? "Tolga Player is licensed under the Apache License 2.0."
@@ -1847,6 +1867,7 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
         ImGui::SetCursorScreenPos({p.x, p.y + h});
         ImGui::Dummy({inner, 0});
     }
+
 }
 
 // ------------------------------------------------------------- playlist
@@ -2335,6 +2356,18 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
     dl->AddCircleFilled(closeC, 18, IM_COL32(255, 255, 255, ImGui::IsItemHovered() ? 36 : 22), 32);
     dl->AddLine({closeC.x - 3, closeC.y - 6}, {closeC.x + 3, closeC.y}, IM_COL32(255, 255, 255, 230), 2.0f);
     dl->AddLine({closeC.x + 3, closeC.y}, {closeC.x - 3, closeC.y + 6}, IM_COL32(255, 255, 255, 230), 2.0f);
+#ifndef __APPLE__
+    // About Tolga Player (macOS has it in the app menu)
+    {
+        const ImVec2 c{closeC.x + 44, closeC.y};
+        ImGui::SetCursorScreenPos({c.x - 18, c.y - 18});
+        if (ImGui::InvisibleButton("##about", {36, 36})) openAbout();
+        const bool hov = ImGui::IsItemHovered();
+        dl->AddCircleFilled(c, 18, IM_COL32(255, 255, 255, hov ? 36 : 22), 32);
+        dl->AddCircleFilled({c.x, c.y - 6.0f}, 1.8f, IM_COL32(255, 255, 255, 230), 12);
+        dl->AddLine({c.x, c.y - 1.5f}, {c.x, c.y + 7.0f}, IM_COL32(255, 255, 255, 230), 2.2f);
+    }
+#endif
 
     struct Tab { PanelTab tab; const char* label; };
     const Tab tabs[] = {{PanelTab::Video, "Video"}, {PanelTab::Audio, "Audio"}, {PanelTab::Subtitles, "Subtitles"}};

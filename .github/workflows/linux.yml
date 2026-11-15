@@ -1,0 +1,77 @@
+# Linux AppImage. Built on Ubuntu 22.04 (glibc 2.35), so it runs on that and every newer
+# distribution. A tag v* attaches the AppImage to that release; a manual run keeps it as
+# a workflow artifact.
+name: Linux AppImage
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build tools and system headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential nasm pkg-config ninja-build \
+            patchelf python3-pip curl \
+            libva-dev libdrm-dev libegl-dev libgl-dev \
+            libx11-dev libxext-dev libxrandr-dev libxpresent-dev libxss-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libxfixes-dev libxkbcommon-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev libdbus-1-dev libudev-dev \
+            libasound2-dev libpulse-dev libfontconfig-dev libunibreak-dev
+          pip3 install --user "meson>=1.6,<2"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Cache LGPL libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps/linux-x86_64
+            deps/src
+          key: deps-linux-x86_64-ubuntu22-${{ hashFiles('scripts/build-deps.sh') }}
+
+      - name: LGPL libraries (mpv, FFmpeg, ...)
+        run: scripts/build-deps.sh
+
+      - name: OpenSubtitles key (repository secret OPENSUBTITLES_KEY)
+        env:
+          KEY: ${{ secrets.OPENSUBTITLES_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then printf '%s' "$KEY" > opensubtitles.key
+          else echo "::warning::OPENSUBTITLES_KEY secret missing: online subtitle search needs the user's own key"; fi
+
+      - name: AppImage
+        env:
+          # a release must have AirPlay (the prebuilt module for Linux has to be published first)
+          TOLGA_REQUIRE_AIRPLAY: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '' }}
+        run: scripts/make-appimage.sh
+
+      - name: Stable file name for the website's download link
+        run: |
+          cd dist
+          f="$(ls Tolga-Player-*-x86_64.AppImage)"
+          cp "$f" Tolga-Player-x86_64.AppImage
+          ls -la
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tolga-Player-linux-x86_64
+          path: dist/*.AppImage*
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --title "Tolga Player ${TAG#v}" --notes "Tolga Player ${TAG#v}"
+          gh release upload "$TAG" dist/*.AppImage dist/*.AppImage.zsync --clobber

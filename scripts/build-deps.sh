@@ -5,6 +5,9 @@
 # these builds can be (dynamic linking + license notices, see THIRD_PARTY_NOTICES).
 #
 # Usage:   scripts/build-deps.sh            (macOS: brew install meson ninja nasm pkg-config cmake)
+#          Linux (Debian/Ubuntu): apt install meson ninja-build nasm pkg-config cmake libva-dev libdrm-dev
+#            libasound2-dev libpulse-dev
+#            libfontconfig-dev
 # Output:  deps/<os>-<arch>/prefix/{lib,include,bin}, deps/<os>-<arch>/licenses/, versions.txt
 #
 # Every library is built as a shared library, so each LGPL part can be replaced by the user.
@@ -21,6 +24,8 @@ FREETYPE_TAG=VER-2-15-0
 DAV1D_VER=1.5.4
 UCHARDET_VER=0.0.8
 OPENSSL_VER=3.5.9
+NVCODEC_TAG=n13.0.19.0
+CURL_TAG=curl-8_23_0
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -101,7 +106,7 @@ if ! done_mark openssl; then
     case "$OS-$ARCH" in
         darwin-arm64)  OSSL_TARGET=(darwin64-arm64-cc "-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET") ;;
         darwin-x86_64) OSSL_TARGET=(darwin64-x86_64-cc "-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET") ;;
-        *)             OSSL_TARGET=() ;;
+        *)             OSSL_TARGET=(-fPIC) ;;   # linked into shared libraries (FFmpeg, AirPlay module)
     esac
     (cd "$SRC/openssl" && { make clean >/dev/null 2>&1 || true; } &&
      ./Configure ${OSSL_TARGET[@]+"${OSSL_TARGET[@]}"} no-shared no-tests no-docs no-module --prefix="$PREFIX" --libdir=lib &&
@@ -109,6 +114,29 @@ if ! done_mark openssl; then
     mark openssl
 fi
 license openssl "$SRC/openssl/LICENSE.txt"
+
+# ---------------------------------------------------------------- curl (curl license), Linux only, static
+# HTTPS only, on the static OpenSSL: the system libcurl drags in dozens of libraries that
+# differ between distributions (macOS uses the one in the SDK)
+if [ "$OS" = linux ]; then
+    fetch_git curl https://github.com/curl/curl.git "$CURL_TAG"
+    version curl "$CURL_TAG" "curl License (MIT-style, static)  https://curl.se"
+    if ! done_mark curl; then
+        log curl
+        (cd "$SRC/curl" && rm -rf _build &&
+         cmake -S . -B _build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+               -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+               -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON -DBUILD_CURL_EXE=OFF -DBUILD_TESTING=OFF \
+               -DBUILD_LIBCURL_DOCS=OFF -DBUILD_MISC_DOCS=OFF -DENABLE_CURL_MANUAL=OFF -DBUILD_EXAMPLES=OFF \
+               -DHTTP_ONLY=ON -DCURL_USE_OPENSSL=ON -DOPENSSL_ROOT_DIR="$PREFIX" -DOPENSSL_USE_STATIC_LIBS=ON \
+               -DCURL_USE_LIBPSL=OFF -DUSE_LIBIDN2=OFF -DCURL_USE_LIBSSH2=OFF -DCURL_USE_LIBSSH=OFF \
+               -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF -DUSE_NGHTTP2=OFF -DCURL_ZLIB=ON -DCURL_DISABLE_LDAP=ON \
+               -DCURL_USE_GSSAPI=OFF -DENABLE_ARES=OFF -DCURL_CA_BUNDLE=none -DCURL_CA_PATH=none &&
+         cmake --build _build -j"$JOBS" && cmake --install _build)
+        mark curl
+    fi
+    license curl "$SRC/curl/COPYING"
+fi
 
 # ---------------------------------------------------------------- dav1d (AV1 decoder, BSD-2)
 fetch_git dav1d https://github.com/videolan/dav1d.git "$DAV1D_VER"
@@ -168,6 +196,14 @@ if [ "${TOLGA_SKIP_UCHARDET:-0}" != 1 ]; then
     license uchardet "$SRC/uchardet/COPYING"
 fi
 
+# ---------------------------------------------------------------- nv-codec-headers (MIT), Linux only
+# headers only: FFmpeg loads the NVIDIA driver at run time, nothing is linked
+if [ "$OS" = linux ]; then
+    fetch_git nv-codec-headers https://github.com/FFmpeg/nv-codec-headers.git "$NVCODEC_TAG"
+    version nv-codec-headers "$NVCODEC_TAG" "MIT (headers only)  https://github.com/FFmpeg/nv-codec-headers"
+    done_mark nvcodec || { log nv-codec-headers; make -C "$SRC/nv-codec-headers" PREFIX="$PREFIX" install && mark nvcodec; }
+fi
+
 # ---------------------------------------------------------------- FFmpeg (LGPL-2.1 build)
 fetch_git ffmpeg https://github.com/FFmpeg/FFmpeg.git "n$FFMPEG_VER"
 version ffmpeg "$FFMPEG_VER" "LGPL-2.1+ (built without --enable-gpl/--enable-nonfree)  https://ffmpeg.org"
@@ -183,7 +219,9 @@ if ! done_mark ffmpeg; then
                   --extra-ldflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -Wl,-headerpad_max_install_names"
                   --extra-libs=-liconv)   # iconv lives in libiconv on macOS, not libSystem
     else
-        FF_OPTS+=(--enable-rpath)
+        # VA-API (Intel/AMD), NVDEC (NVIDIA, loaded at run time), TLS from the static OpenSSL above
+        FF_OPTS+=(--enable-rpath --enable-vaapi --enable-libdrm --enable-ffnvcodec --enable-nvdec
+                  --enable-openssl --pkg-config-flags=--static)
     fi
     (cd "$SRC/ffmpeg" && make distclean >/dev/null 2>&1 || true
      cd "$SRC/ffmpeg" && ./configure "${FF_OPTS[@]}" && make -j"$JOBS" && make install)
@@ -237,6 +275,17 @@ if ! done_mark mpv; then
         MPV_OPTS+=(-Dswift-build=enabled -Dmacos-cocoa-cb=disabled -Dmacos-media-player=disabled
                    -Dcocoa=enabled -Dcoreaudio=enabled -Daudiounit=disabled -Dgl-cocoa=enabled
                    -Dvideotoolbox-gl=enabled -Dvideotoolbox-pl=disabled)
+    else
+        # The app draws through the libmpv render API (OpenGL from SDL), so mpv needs no window
+        # system of its own; mpv's X11 code is GPL anyway. Hardware decoding: NVDEC hands frames
+        # to OpenGL through CUDA, VA-API (Intel/AMD) copies them back (FFmpeg opens the GPU).
+        # No PipeWire output: its client library must match the system; PipeWire systems play
+        # through their PulseAudio service.
+        MPV_OPTS+=(-Dgl=enabled -Dplain-gl=enabled -Dx11=disabled -Dwayland=disabled -Ddrm=disabled
+                   -Degl=disabled -Dgbm=disabled -Dvaapi=disabled -Dcuda-hwaccel=enabled -Dcuda-interop=enabled
+                   -Dalsa=enabled -Dpulse=enabled -Dpipewire=disabled -Djack=disabled -Dsndio=disabled
+                   -Doss-audio=disabled -Dopenal=disabled -Dlibcurl=disabled -Dsixel=disabled -Dcaca=disabled
+                   -Dvdpau=disabled -Dxv=disabled -Ddmabuf-wayland=disabled)
     fi
     meson_build mpv "${MPV_OPTS[@]}"
     mark mpv

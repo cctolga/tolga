@@ -69,18 +69,29 @@ pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
 # AirPlay is a separate, closed-source module; the player only knows the interface in
 # include/tolga/AirPlayApi.h. Where it comes from, in this order:
 #   1. TOLGA_AIRPLAY_DIR: the module's private source folder (the author's builds)
-#   2. the prebuilt library (macOS): downloaded once from this repository's releases and
+#   2. the prebuilt library (macOS, Linux x86_64): downloaded once from this repository's releases and
 #      checked against the SHA-256 in cmake/AirPlayPrebuilt.cmake. AirPlay then works for a
 #      14-day trial and afterwards needs a Tolga license.
 #      TOLGA_AIRPLAY_PREBUILT_FILE uses a local package instead (any OS, for testing).
 #   3. none: src/AirPlayNone.cpp, the AirPlay menu points to the official app.
 set(TOLGA_AIRPLAY_DIR "" CACHE PATH "Source folder of the Tolga AirPlay module")
-option(TOLGA_AIRPLAY_PREBUILT "Download the prebuilt AirPlay module (macOS)" ON)
+option(TOLGA_AIRPLAY_PREBUILT "Download the prebuilt AirPlay module (macOS, Linux x86_64)" ON)
 set(TOLGA_AIRPLAY_PREBUILT_FILE "" CACHE FILEPATH "Local prebuilt AirPlay package (.tar.gz) to use instead of downloading")
 set(TOLGA_WEBSITE "https://cctolga.github.io/tolga/" CACHE STRING "Web page of the official Tolga app")
 set(TOLGA_API_INCLUDE ${CMAKE_SOURCE_DIR}/include)
 find_package(Threads REQUIRED)
 include(cmake/AirPlayPrebuilt.cmake)
+# the package for this platform (empty if none is published for it)
+if(APPLE)
+  set(_prebuilt_key macos)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+  set(_prebuilt_key linux_x86_64)
+else()
+  set(_prebuilt_key none)
+endif()
+foreach(_f VERSION API URL SHA256)
+  set(TOLGA_AIRPLAY_PREBUILT_${_f} "${TOLGA_AIRPLAY_PREBUILT_${_prebuilt_key}_${_f}}")
+endforeach()
 file(STRINGS ${TOLGA_API_INCLUDE}/tolga/AirPlayApi.h _api_line REGEX "^#define TOLGA_AIRPLAY_API_VERSION")
 string(REGEX REPLACE ".* ([0-9]+).*" "\\1" _api_version "${_api_line}")
 
@@ -89,7 +100,7 @@ if(TOLGA_AIRPLAY_DIR)
   add_subdirectory(${TOLGA_AIRPLAY_DIR} ${CMAKE_BINARY_DIR}/airplay-module)
   set(_airplay_lib tolga_airplay_module)
   message(STATUS "AirPlay: module built from ${TOLGA_AIRPLAY_DIR}")
-elseif(TOLGA_AIRPLAY_PREBUILT AND (TOLGA_AIRPLAY_PREBUILT_FILE OR (APPLE AND TOLGA_AIRPLAY_PREBUILT_URL)))
+elseif(TOLGA_AIRPLAY_PREBUILT AND (TOLGA_AIRPLAY_PREBUILT_FILE OR TOLGA_AIRPLAY_PREBUILT_URL))
   if(APPLE)
     set(_prebuilt_name libtolga_airplay.dylib)
     set(_prebuilt_soname "@rpath/libtolga_airplay.dylib")

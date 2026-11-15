@@ -170,6 +170,9 @@ int main(int argc, char** argv) {
     // A TV closing its connection mid-write must not kill the app.
     std::signal(SIGPIPE, SIG_IGN);
 #endif
+    // name + id for the desktop: on Linux the id is the Wayland app id / X11 window class,
+    // which ties the window to app.tolga.player.desktop (icon, name in the dock)
+    SDL_SetAppMetadata("Tolga Player", TOLGA_VERSION, "app.tolga.player");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -178,19 +181,55 @@ int main(int argc, char** argv) {
     g_openEvent = g_wakeEvent + 1;
     g_aboutEvent = g_wakeEvent + 2;
 
-    // macOS only gives a modern GL with a 3.2+ core, forward-compatible profile.
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
-    SDL_Window* window = SDL_CreateWindow("Tolga Player", 960, 540,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-    if (!window) {
-        std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+    // OpenGL: the newest of these that the graphics driver gives us. macOS only gives a modern GL
+    // with a 3.2+ core, forward-compatible profile; older PCs (e.g. Intel graphics before 2011)
+    // only have OpenGL 2.1, which mpv and the controls can use too.
+    struct GlVersion { int major, minor, profile, flags; const char* glsl; };
+#ifdef __APPLE__
+    const GlVersion glVersions[] = {
+        {3, 2, SDL_GL_CONTEXT_PROFILE_CORE, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG, "#version 150"}};
+#else
+    const GlVersion glVersions[] = {{3, 2, SDL_GL_CONTEXT_PROFILE_CORE, 0, "#version 150"},
+                                    {3, 0, 0, 0, "#version 130"},
+                                    {2, 1, 0, 0, "#version 120"}};
+#endif
+    SDL_Window* window = nullptr;
+    SDL_GLContext gl = nullptr;
+    const char* glslVersion = nullptr;
+    std::string glError;
+    for (const GlVersion& v : glVersions) {
+        SDL_GL_ResetAttributes();
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, v.major);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, v.minor);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, v.profile);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, v.flags);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        // a new window each time: on EGL the window's config is tied to the context type
+        window = SDL_CreateWindow("Tolga Player", 960, 540,
+            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN);
+        if (!window) {
+            std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+            return 1;
+        }
+        gl = SDL_GL_CreateContext(window);
+        if (gl) {
+            glslVersion = v.glsl;
+            break;
+        }
+        glError += "\n  OpenGL " + std::to_string(v.major) + "." + std::to_string(v.minor) + ": " + SDL_GetError();
+        SDL_DestroyWindow(window);
+        window = nullptr;
+    }
+    if (!gl) {
+        std::fprintf(stderr, "Could not create an OpenGL context (Tolga Player needs OpenGL 2.1 or newer):%s\n",
+                     glError.c_str());
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player",
+            "Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it.",
+            nullptr);
         return 1;
     }
+    SDL_GL_MakeCurrent(window, gl);
+    SDL_GL_SetSwapInterval(1);  // vsync
     SDL_SetWindowMinimumSize(window, 480, 270);
     macSetupWindow(window);  // transparent title bar over the video (macOS only)
     macHookAboutMenu([] {
@@ -199,19 +238,13 @@ int main(int argc, char** argv) {
         SDL_PushEvent(&ev);
     });
 
-    SDL_GLContext gl = SDL_GL_CreateContext(window);
-    if (!gl) {
-        std::fprintf(stderr, "SDL_GL_CreateContext failed: %s\n", SDL_GetError());
-        return 1;
-    }
-    SDL_GL_MakeCurrent(window, gl);
-    SDL_GL_SetSwapInterval(1);  // vsync
+    SDL_ShowWindow(window);
 
     MpvPlayer player;
     if (!player.init(getProcAddress, pushWake)) return 1;
 
     Overlay overlay;
-    if (!overlay.init(window, gl)) return 1;
+    if (!overlay.init(window, gl, glslVersion)) return 1;
 
     // Settings live in the per-user app data folder (~/Library/Application Support/Tolga on
     // macOS, ~/.local/share/Tolga on Linux, %APPDATA%\Tolga on Windows).
@@ -238,10 +271,22 @@ int main(int argc, char** argv) {
     {   // About window: versions, license and third-party notices (from the app bundle)
         Overlay::AboutInfo about;
         about.version = TOLGA_VERSION;
-        about.mpvVersion = player.propertyString("mpv-version");
-        about.ffmpegVersion = player.propertyString("ffmpeg-version");
+        // "mpv v0.42.0-dirty" / "n9.0.2" -> "mpv 0.42.0" / "9.0.2"
+        auto plain = [](std::string v) {
+            const size_t d = v.find_first_of("0123456789");
+            if (d == std::string::npos) return v;
+            v = v.substr(d);
+            const size_t end = v.find_first_not_of("0123456789.");
+            return end == std::string::npos ? v : v.substr(0, end);
+        };
+        const std::string mpvVer = plain(player.propertyString("mpv-version"));
+        about.mpvVersion = mpvVer.empty() ? std::string() : "mpv " + mpvVer;
+        about.ffmpegVersion = plain(player.propertyString("ffmpeg-version"));
         std::string base;
         if (const char* b = SDL_GetBasePath()) base = b;  // .../Tolga Player.app/Contents/Resources/
+#if defined(__linux__)
+        base += "../share/tolga-player/";  // AppImage / install layout: usr/bin + usr/share/tolga-player
+#endif
         about.licenseText = readTextFile(base + "Licenses/Tolga/LICENSE");
         if (about.licenseText.empty()) about.licenseText = readTextFile(std::string(TOLGA_SOURCE_DIR) + "/LICENSE");
         about.creditsText = readTextFile(base + "THIRD_PARTY_NOTICES.txt");

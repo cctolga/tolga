@@ -15,6 +15,9 @@
   const CONFIG = {
     price: "$14.99",
     downloadUrl: "https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player.dmg",
+    // Linux visitors get the AppImage once it is published (set linuxReady to true then)
+    linuxReady: false,
+    downloadLinux: "https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-x86_64.AppImage",
     buyUrl: "#pricing",                       // fallback if Paddle isn't set up
     // Paddle checkout: sandbox token starts with "test_", live with "live_"
     paddleToken: "test_0e56babf0a68e23ff84999667cc",
@@ -207,10 +210,10 @@
       <h1>Every movie on your Mac, on your Apple&nbsp;TV.</h1>
       <p class="lede">MKV, DTS, two languages and a pile of subtitles: Tolga Player plays them on the big screen in about a second, and you switch them from the couch.</p>
       <div class="actions">
-        <a class="button primary" data-link="downloadUrl" href="#">Download for Mac</a>
+        <a class="button primary" data-link="downloadUrl" data-os-label href="#">Download for Mac</a>
         <a class="button ghost" href="#pricing">Buy for <span data-text="price">$14.99</span></a>
       </div>
-      <p class="fine">Free on your Mac. AirPlay free for 14 days. For Apple Silicon Macs with macOS 12 or later.</p>
+      <p class="fine" data-os-fine>Free on your Mac. AirPlay free for 14 days. For Apple Silicon Macs with macOS 12 or later.</p>
     </div>
 
     <div class="room" id="room" aria-label="Tolga Player on a Mac sending a movie to an Apple TV" role="img">
@@ -409,6 +412,13 @@
 </footer>
 
 <script>
+  // Linux (not Android): the AppImage instead of the Mac disk image
+  if (CONFIG.linuxReady && /Linux/.test(navigator.platform || navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
+    CONFIG.downloadUrl = CONFIG.downloadLinux;
+    for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Linux";
+    for (const el of document.querySelectorAll("[data-os-fine]"))
+      el.textContent = "Free on your computer. AirPlay free for 14 days. One file for 64-bit Linux: make it executable and open it.";
+  }
   for (const a of document.querySelectorAll("[data-link]")) a.href = CONFIG[a.dataset.link];
   for (const a of document.querySelectorAll("[data-mail]")) { a.href = "mailto:" + CONFIG[a.dataset.mail]; a.textContent = CONFIG[a.dataset.mail]; }
   for (const el of document.querySelectorAll("[data-text]")) el.textContent = CONFIG[el.dataset.text];

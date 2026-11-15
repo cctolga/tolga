@@ -20,6 +20,16 @@ void MpvPlayer::onWakeup(void* self) {
     if (p->m_wakeup) p->m_wakeup();
 }
 
+namespace {
+#if defined(__linux__)
+// NVIDIA: NVDEC straight to OpenGL. Intel/AMD: VA-API, copied back to the CPU; the LGPL
+// libmpv has no X11/Wayland code for handing VA-API frames to OpenGL directly.
+const char* const kHwdecMode = "nvdec,vaapi-copy,auto-copy-safe";
+#else
+const char* const kHwdecMode = "auto-safe";   // VideoToolbox on macOS, D3D11 on Windows
+#endif
+}  // namespace
+
 bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wakeup) {
     m_wakeup = std::move(wakeup);
 
@@ -31,7 +41,7 @@ bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wake
 
     // Playback options. Errors on optional ones are ignored.
     mpv_set_option_string(m_mpv, "vo", "libmpv");
-    mpv_set_option_string(m_mpv, "hwdec", "auto-safe");   // VideoToolbox on macOS
+    mpv_set_option_string(m_mpv, "hwdec", kHwdecMode);
     mpv_set_option_string(m_mpv, "keep-open", "yes");     // stay on last frame at the end
     mpv_set_option_string(m_mpv, "idle", "yes");
     mpv_set_option_string(m_mpv, "osc", "no");            // we draw our own controls
@@ -267,7 +277,7 @@ void MpvPlayer::setRotate(int degrees) {
 }
 
 void MpvPlayer::setHardwareDecoding(bool on) {
-    setString(m_mpv, "hwdec", on ? "auto-safe" : "no");
+    setString(m_mpv, "hwdec", on ? kHwdecMode : "no");
 }
 
 void MpvPlayer::setPicture(const char* property, int value) {
