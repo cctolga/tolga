@@ -527,7 +527,7 @@ void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out)
     m_hoveringPanel = true;
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddText(ImGui::GetFont(), 19.0f, ImGui::GetCursorScreenPos(), IM_COL32(255, 255, 255, 245), "Tolga License");
+    dl->AddText(ImGui::GetFont(), 19.0f, ImGui::GetCursorScreenPos(), IM_COL32(255, 255, 255, 245), "Tolga Player License");
     ImGui::Dummy({0, 28});
     const float wrap = dlg.x - 44.0f;
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrap);
@@ -572,7 +572,7 @@ void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out)
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.14f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.20f));
     if (!licensed && !lic->buyUrl.empty()) {
-        if (ImGui::Button("Buy Tolga", bsz)) out.openBuyPage = true;
+        if (ImGui::Button("Buy License", bsz)) out.openBuyPage = true;
         ImGui::SameLine(0, 10);
     }
     if (ImGui::Button(licensed ? "Close" : "Not Now", bsz) || ImGui::IsKeyPressed(ImGuiKey_Escape))
@@ -636,7 +636,7 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
     ImFont* font = ImGui::GetFont();
     const ImVec2 c{size.x * 0.5f, size.y * 0.5f};
 
-    const char* title = "Tolga";
+    const char* title = "Tolga Player";
     const float titleSize = 40.0f;
     ImVec2 ts = font->CalcTextSizeA(titleSize, FLT_MAX, 0, title);
     bg->AddText(font, titleSize, {c.x - ts.x * 0.5f, c.y - 70}, IM_COL32(255, 255, 255, 235), title);
@@ -886,9 +886,9 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
         ImGui::MenuItem("This Computer", nullptr, true);
         ImGui::Separator();
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 250);
-        ImGui::TextDisabled("Playing on an Apple TV is part of the official Tolga app.");
+        ImGui::TextDisabled("Playing on an Apple TV is part of the official Tolga Player app.");
         ImGui::PopTextWrapPos();
-        if (ImGui::MenuItem("Get Tolga...")) out.openBuyPage = true;
+        if (ImGui::MenuItem("Get Tolga Player...")) out.openBuyPage = true;
         ImGui::EndPopup();
         ImGui::PopStyleVar();
         return;

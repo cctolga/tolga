@@ -1,4 +1,4 @@
-# Tolga
+# Tolga Player
 
 A small, good-looking cross-platform video player.
 libmpv (playback) + SDL3 (window, GL context, file dialog) + Dear ImGui (controls).
@@ -12,7 +12,7 @@ cmake --build build -j
 ./build/tolga ~/Movies/some-video.mkv
 ```
 
-## Release build (Tolga.app + .dmg)
+## Release build (Tolga Player.app + .dmg)
 
 The development build above uses Homebrew's mpv and ffmpeg. Those are GPL builds, so they
 must not be shipped together with the closed-source AirPlay module. A release uses LGPL builds made from source:
@@ -20,7 +20,7 @@ must not be shipped together with the closed-source AirPlay module. A release us
 ```sh
 brew install meson ninja nasm pkg-config cmake
 scripts/build-deps.sh      # once: FFmpeg (LGPL), libmpv (-Dgpl=false), libplacebo, libass, ... (~20-30 min)
-scripts/make-app.sh        # dist/Tolga.app and dist/Tolga-<version>-<arch>.dmg
+scripts/make-app.sh        # dist/Tolga Player.app and dist/Tolga-Player-<version>-<arch>.dmg
 ```
 
 `build-deps.sh` puts everything in `deps/darwin-<arch>/` and stops with an error if FFmpeg or

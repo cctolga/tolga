@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>                 <string>Tolga</string>
-    <key>CFBundleDisplayName</key>          <string>Tolga</string>
+    <key>CFBundleName</key>                 <string>Tolga Player</string>
+    <key>CFBundleDisplayName</key>          <string>Tolga Player</string>
     <key>CFBundleExecutable</key>           <string>Tolga</string>
     <key>CFBundleIdentifier</key>           <string>@BUNDLE_ID@</string>
     <key>CFBundleIconFile</key>             <string>Tolga</string>
@@ -19,7 +19,7 @@
 
     <!-- macOS asks the user once before Tolga may look for Apple TVs on the local network -->
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Tolga looks for Apple TVs on your network so it can play videos on them.</string>
+    <string>Tolga Player looks for Apple TVs on your network so it can play videos on them.</string>
     <key>NSBonjourServices</key>
     <array>
         <string>_airplay._tcp</string>

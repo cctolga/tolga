@@ -35,7 +35,7 @@ public:
     std::vector<AirPlayTarget> devices() const override { return {}; }
     bool searching() const override { return false; }
     bool canCast(const std::string&, const std::vector<CastTrack>&, std::string& reason) const override {
-        reason = "AirPlay is part of the official Tolga app.";
+        reason = "AirPlay is part of the official Tolga Player app.";
         return false;
     }
     void startCast(const std::string&, const std::string&, double, double, const std::vector<CastTrack>&,
@@ -164,7 +164,7 @@ int main(int argc, char** argv) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-    SDL_Window* window = SDL_CreateWindow("Tolga", 960, 540,
+    SDL_Window* window = SDL_CreateWindow("Tolga Player", 960, 540,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -316,7 +316,7 @@ int main(int argc, char** argv) {
                     player.resetVideoSettings();  // aspect, crop, rotation... start fresh per file
                     overlay.resetVideoSettings();
                     fittedW = fittedH = 0;  // new file: fit again once its size is known
-                    SDL_SetWindowTitle(window, st.title.empty() ? "Tolga" : st.title.c_str());
+                    SDL_SetWindowTitle(window, st.title.empty() ? "Tolga Player" : st.title.c_str());
                 }
                 // dwidth/dheight can arrive a little after FILE_LOADED. Fit once per file only:
                 // aspect / crop / rotation changes keep the window and letterbox instead.

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Builds Tolga.app and a .dmg for macOS, with the LGPL libraries from scripts/build-deps.sh inside.
+# Builds "Tolga Player.app" and a .dmg for macOS, with the LGPL libraries from scripts/build-deps.sh inside.
 #
 #   scripts/build-deps.sh                 # once (takes a while)
-#   scripts/make-app.sh                   # -> dist/Tolga.app, dist/Tolga-<version>-<arch>.dmg
+#   scripts/make-app.sh                   # -> dist/Tolga Player.app, dist/Tolga-Player-<version>-<arch>.dmg
 #
 # AirPlay comes from the closed-source module: built from ../tolga-airplay (or
 # TOLGA_AIRPLAY_DIR) if that folder exists, otherwise the prebuilt library that CMake
@@ -25,7 +25,7 @@ DEPS="${TOLGA_DEPS:-$ROOT/deps/darwin-$ARCH}"
 PREFIX="$DEPS/prefix"
 BUILD="$ROOT/build-release"
 DIST="$ROOT/dist"
-APP="$DIST/Tolga.app"
+APP="$DIST/Tolga Player.app"
 BUNDLE_ID="${TOLGA_BUNDLE_ID:-app.tolga.player}"
 SIGN_ID="${TOLGA_SIGN_ID:-}"
 NOTARY="${TOLGA_NOTARY_PROFILE:-}"
@@ -204,27 +204,27 @@ The AirPlay module of the official app is proprietary software, (c) $(date +%Y) 
 It is not covered by the Apache License; its source code is not published."
 {
 cat <<EOF
-Tolga $VERSION
+Tolga Player $VERSION
 
-The Tolga player is open source under the Apache License, Version 2.0
+Tolga Player is open source under the Apache License, Version 2.0
 (Licenses/Tolga/LICENSE and Licenses/Tolga/NOTICE).
 Source code: ${TOLGA_SOURCE_URL:-https://github.com/cctolga/tolga}
 ${AIRPLAY_NOTE}
 
 Third-party software
 
-Tolga uses the open-source libraries listed below. Their license texts are in
-Tolga.app/Contents/Resources/Licenses/.
+Tolga Player uses the open-source libraries listed below. Their license texts are in
+Tolga Player.app/Contents/Resources/Licenses/.
 
 LGPL components (libmpv, FFmpeg, libplacebo, fribidi$( [ -d "$LIC/uchardet" ] && echo ", uchardet")):
   These libraries are licensed under the GNU Lesser General Public License v2.1 or later.
-  They are included unmodified, as separate dynamic libraries in Tolga.app/Contents/Frameworks
-  (and the ffmpeg/ffprobe programs in Tolga.app/Contents/MacOS). You may replace them with
+  They are included unmodified, as separate dynamic libraries in Tolga Player.app/Contents/Frameworks
+  (and the ffmpeg/ffprobe programs in Tolga Player.app/Contents/MacOS). You may replace them with
   your own builds of the same libraries; afterwards re-sign the app with
-      codesign --force --deep -s - Tolga.app
+      codesign --force --deep -s - "Tolga Player.app"
   The source code of these libraries is available from the addresses below; the exact build
   configuration is in Licenses/build-deps.sh. On request we also provide the source code on a
-  data medium, or by download, for at least three years from the date you received Tolga.
+  data medium, or by download, for at least three years from the date you received Tolga Player.
   FFmpeg is built without --enable-gpl and --enable-nonfree; libmpv is built with -Dgpl=false.
 
 Components and versions:
@@ -262,7 +262,7 @@ if "$APP/Contents/MacOS/ffmpeg" -hide_banner -buildconf | grep -Eq -- '--enable-
 fi
 
 # ---------------------------------------------------------------- 7. dmg
-DMG="$DIST/Tolga-$VERSION-$ARCH.dmg"
+DMG="$DIST/Tolga-Player-$VERSION-$ARCH.dmg"
 log "disk image $DMG"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -270,7 +270,7 @@ cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cp "$NOTICES" "$STAGE/Third-Party Notices.txt"
 rm -f "$DMG"
-hdiutil create -quiet -volname "Tolga $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO "$DMG"
+hdiutil create -quiet -volname "Tolga Player $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO "$DMG"
 [ -n "$SIGN_ID" ] && codesign --force --timestamp -s "$SIGN_ID" "$DMG"
 
 if [ -n "$NOTARY" ]; then

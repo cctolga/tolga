@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5ef0dc"/><stop offset="1" stop-color="#0f95a0"/>
+    </linearGradient>
+    <linearGradient id="scr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4fe3d4"/><stop offset="1" stop-color="#0e9ea6"/>
+    </linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.28"/></filter>
+    <filter id="ps" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="20" flood-color="#0a6a72" flood-opacity="0.30"/></filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)" filter="url(#sh)"/>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="184.5" fill="none" stroke="#000" stroke-opacity="0.06" stroke-width="3"/>
+  <g filter="url(#ps)" transform="translate(0,33)">
+    <path d="M310 250 H714 Q774 250 774 310 V540 Q774 600 714 600 H606 L512 488 L418 600 H310 Q250 600 250 540 V310 Q250 250 310 250 Z" fill="#ffffff"/>
+    <path fill-rule="nonzero" d="M482 330 L590 394 Q606 404 590 414 L482 478 Q464 489 464 468 L464 340 Q464 319 482 330 Z" fill="#12a4aa"/>
+    <path d="M512 560 L624 694 Q634 708 616 708 L408 708 Q390 708 400 694 Z" fill="#e8483f"/>
+  </g>
+</svg>
