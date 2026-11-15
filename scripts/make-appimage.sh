@@ -3,7 +3,7 @@
 # scripts/build-deps.sh inside.
 #
 #   scripts/build-deps.sh                 # once (takes a while)
-#   scripts/make-appimage.sh              # -> dist/Tolga-Player-<version>-x86_64.AppImage
+#   scripts/make-appimage.sh              # -> dist/Tolga-Player-Linux.AppImage
 #
 # AirPlay comes from the closed-source module: built from ../tolga-airplay (or
 # TOLGA_AIRPLAY_DIR) if that folder exists, otherwise the prebuilt library that CMake
@@ -34,7 +34,7 @@ else
     AIRPLAY_DIR=""
 fi
 # AppImageUpdate / Gear Lever find new versions through this
-UPDATE_INFO="${TOLGA_UPDATE_INFO:-gh-releases-zsync|cctolga|tolga|latest|Tolga-Player-*-x86_64.AppImage.zsync}"
+UPDATE_INFO="${TOLGA_UPDATE_INFO:-gh-releases-zsync|cctolga|tolga|latest|Tolga-Player-Linux.AppImage.zsync}"
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[31merror:\033[0m %s\n' "$*"; exit 1; }
@@ -269,7 +269,7 @@ if [ ! -f "$TOOLS/runtime-x86_64" ]; then
     curl -fL --retry 3 -o "$TOOLS/runtime-x86_64" \
         https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
 fi
-OUTFILE="$DIST/Tolga-Player-$VERSION-$ARCH.AppImage"
+OUTFILE="$DIST/Tolga-Player-Linux.AppImage"   # same name every version: releases/latest/download/... stays valid
 mkdir -p "$DIST"
 rm -f "$OUTFILE" "$OUTFILE.zsync"
 log "AppImage $OUTFILE"

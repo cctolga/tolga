@@ -35,7 +35,7 @@ must not be shipped together with the closed-source AirPlay module. A release us
 ```sh
 brew install meson ninja nasm pkg-config cmake
 scripts/build-deps.sh      # once: FFmpeg (LGPL), libmpv (-Dgpl=false), libplacebo, libass, ... (~20-30 min)
-scripts/make-app.sh        # dist/Tolga Player.app and dist/Tolga-Player-<version>-<arch>.dmg
+scripts/make-app.sh        # dist/Tolga Player.app and dist/Tolga-Player-Mac.dmg
 ```
 
 `build-deps.sh` puts everything in `deps/darwin-<arch>/` and stops with an error if FFmpeg or
@@ -58,15 +58,16 @@ TOLGA_NOTARY_PROFILE=tolga-notary scripts/make-app.sh
 ```sh
 # Ubuntu 22.04 or newer, plus the packages listed at the top of scripts/build-deps.sh
 scripts/build-deps.sh      # once: the same LGPL libraries, plus a static curl (HTTPS only)
-scripts/make-appimage.sh   # dist/Tolga-Player-<version>-x86_64.AppImage
+scripts/make-appimage.sh   # dist/Tolga-Player-Linux.AppImage
 ```
 
 The AppImage carries its libraries in `usr/lib`; only what must match the user's system
 (C/C++ runtime, graphics drivers, X11/Wayland, ALSA/PulseAudio, fontconfig) comes from
 the distribution. It runs on distributions with the same or a newer glibc than the build
 machine, so release builds are made on Ubuntu 22.04 by `.github/workflows/linux.yml`:
-a tag `v*` attaches `Tolga-Player-<version>-x86_64.AppImage` (and a copy named
-`Tolga-Player-x86_64.AppImage` for the website's download link) to that release.
+a tag `v*` attaches `Tolga-Player-Linux.AppImage` to that release. Release files keep the
+same name in every version (`Tolga-Player-Mac.dmg`, `Tolga-Player-Linux.AppImage`), so the
+website's `releases/latest/download/...` links always point to the newest one.
 
 Other knobs: `TOLGA_BUY_URL` (shop page behind "Buy Tolga"), `TOLGA_SOURCE_URL` (where the
 source is, for the notices), `TOLGA_BUNDLE_ID` (default `app.tolga.player`), `MACOSX_DEPLOYMENT_TARGET`

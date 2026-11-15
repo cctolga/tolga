@@ -2,7 +2,7 @@
 # Builds "Tolga Player.app" and a .dmg for macOS, with the LGPL libraries from scripts/build-deps.sh inside.
 #
 #   scripts/build-deps.sh                 # once (takes a while)
-#   scripts/make-app.sh                   # -> dist/Tolga Player.app, dist/Tolga-Player-<version>-<arch>.dmg
+#   scripts/make-app.sh                   # -> dist/Tolga Player.app, dist/Tolga-Player-Mac.dmg
 #
 # AirPlay comes from the closed-source module: built from ../tolga-airplay (or
 # TOLGA_AIRPLAY_DIR) if that folder exists, otherwise the prebuilt library that CMake
@@ -262,7 +262,7 @@ if "$APP/Contents/MacOS/ffmpeg" -hide_banner -buildconf | grep -Eq -- '--enable-
 fi
 
 # ---------------------------------------------------------------- 7. dmg
-DMG="$DIST/Tolga-Player-$VERSION-$ARCH.dmg"
+DMG="$DIST/Tolga-Player-Mac.dmg"   # same name every version: releases/latest/download/... stays valid
 log "disk image $DMG"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT

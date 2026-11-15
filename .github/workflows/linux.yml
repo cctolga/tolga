@@ -54,17 +54,10 @@ jobs:
           TOLGA_REQUIRE_AIRPLAY: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '' }}
         run: scripts/make-appimage.sh
 
-      - name: Stable file name for the website's download link
-        run: |
-          cd dist
-          f="$(ls Tolga-Player-*-x86_64.AppImage)"
-          cp "$f" Tolga-Player-x86_64.AppImage
-          ls -la
-
       - uses: actions/upload-artifact@v4
         with:
-          name: Tolga-Player-linux-x86_64
-          path: dist/*.AppImage*
+          name: Tolga-Player-Linux
+          path: dist/Tolga-Player-Linux.AppImage*
 
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -74,4 +67,4 @@ jobs:
         run: |
           gh release view "$TAG" >/dev/null 2>&1 ||
             gh release create "$TAG" --title "Tolga Player ${TAG#v}" --notes "Tolga Player ${TAG#v}"
-          gh release upload "$TAG" dist/*.AppImage dist/*.AppImage.zsync --clobber
+          gh release upload "$TAG" dist/Tolga-Player-Linux.AppImage dist/Tolga-Player-Linux.AppImage.zsync --clobber
