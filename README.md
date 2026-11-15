@@ -3,6 +3,15 @@
 A small, good-looking cross-platform video player.
 libmpv (playback) + SDL3 (window, GL context, file dialog) + Dear ImGui (controls).
 
+![Tolga Player casting to an Apple TV over AirPlay](docs/screenshots/airplay.png)
+
+| | |
+|---|---|
+| ![Playback with subtitles](docs/screenshots/player.png) | ![Audio track and equalizer panel](docs/screenshots/audio-tracks.png) |
+| Playback with subtitles | Audio tracks and equalizer |
+| ![Video settings panel](docs/screenshots/video-settings.png) | ![Playlist panel](docs/screenshots/playlist.png) |
+| Video settings | Playlist |
+
 ## Build on macOS
 
 ```sh
