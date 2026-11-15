@@ -147,6 +147,16 @@
   .feature svg { width: 30px; height: 30px; margin-bottom: 14px; stroke: var(--glow); fill: none; stroke-width: 1.8;
                  stroke-linecap: round; stroke-linejoin: round; }
 
+  /* ---------- screenshots ---------- */
+  .shots { margin: 40px 0 8px; }
+  .shots figure { margin: 0; }
+  .shots a { display: block; border-radius: 12px; }
+  .shots img { display: block; width: 100%; height: auto; }
+  .shots figcaption { color: var(--mist); font-size: 15px; text-align: center; margin-top: 2px; }
+  .shots .row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 18px; }
+  .steps .shots { margin-top: 48px; max-width: 900px; margin-left: auto; margin-right: auto; }
+  @media (max-width: 620px) { .shots .row { grid-template-columns: 1fr; } }
+
   /* ---------- steps ---------- */
   .steps ol { list-style: none; padding: 0; margin: 40px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; counter-reset: step; }
   .steps li { counter-increment: step; }
@@ -313,6 +323,14 @@
   <div class="wrap">
     <h2>A good player first.</h2>
     <p class="quiet">Tolga Player is a quiet, quick video player for your Mac or Linux PC. The Apple TV part is one click away.</p>
+    <div class="shots">
+      <figure><a href="shots/player.webp"><img src="shots/player.webp" width="1600" height="963" loading="lazy" alt="Tolga Player playing a drone video of a mountain lake with Turkish subtitles"></a><figcaption>Playing a movie with subtitles</figcaption></figure>
+      <div class="row">
+        <figure><a href="shots/audio-tracks.webp"><img src="shots/audio-tracks.webp" width="1600" height="963" loading="lazy" alt="The audio panel listing Turkish, English and German tracks above a 10-band equalizer"></a><figcaption>Audio tracks and the equalizer</figcaption></figure>
+        <figure><a href="shots/video-settings.webp"><img src="shots/video-settings.webp" width="1600" height="963" loading="lazy" alt="The video panel with aspect ratio, crop, rotation, speed and picture controls"></a><figcaption>Picture settings</figcaption></figure>
+        <figure><a href="shots/playlist.webp"><img src="shots/playlist.webp" width="1600" height="963" loading="lazy" alt="The playlist panel open beside the video"></a><figcaption>Playlist</figcaption></figure>
+      </div>
+    </div>
     <div class="grid">
       <div class="feature">
         <svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
@@ -356,6 +374,7 @@
       <li><h3>Pick your Apple TV</h3><p>Click the AirPlay button and choose the TV. The first time, type the code it shows.</p></li>
       <li><h3>Watch</h3><p>The movie continues on the TV. Pause, skip and switch languages with the Siri Remote or from your computer.</p></li>
     </ol>
+    <figure class="shots"><a href="shots/airplay.webp"><img src="shots/airplay.webp" width="1600" height="963" loading="lazy" alt="The AirPlay menu in Tolga Player listing This Computer, an Apple TV 4K called Salon and a MacBook Pro"></a><figcaption>The AirPlay menu finds the Apple TVs on your network</figcaption></figure>
   </div>
 </section>
 
