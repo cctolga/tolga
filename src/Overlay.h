@@ -20,6 +20,8 @@ struct OverlayActions {
     bool   toggleMute       = false;
     bool   toggleFullscreen = false;
     bool   openFile         = false;
+    std::string openPath;             // a file from the recent list on the idle screen
+    bool   clearRecent      = false;
     double seekRelative     = 0.0;
     bool   seekAbsolute     = false;
     bool   seekExact        = false;
@@ -151,6 +153,8 @@ public:
     float controlsAlpha() const { return m_alpha; }
     // Seek-bar previews come from here (may be null).
     void setThumbnails(const Thumbnailer* thumbs) { m_thumbs = thumbs; }
+    // recently opened files for the idle screen (nullptr / empty = no list)
+    void setRecentFiles(const std::vector<std::string>* recent) { m_recent = recent; }
     // The drawable the frame is rendered into (pixels) and its pixels per point; the
     // controls are laid out for exactly this size.
     void setFramebuffer(int w, int h, float scale) { m_fbW = w; m_fbH = h; m_fbScale = scale > 0 ? scale : 1.0f; }
@@ -253,6 +257,7 @@ private:
     bool        m_titlebarOverlay = false;
     bool        m_fullscreen = false;
     const Thumbnailer* m_thumbs = nullptr;
+    const std::vector<std::string>* m_recent = nullptr;
     unsigned    m_thumbTex = 0;       // GL texture with the preview being shown
     int         m_thumbIndex = -1;    // which preview is in the texture
     std::vector<uint8_t> m_thumbPixels;

@@ -92,3 +92,12 @@ void macBringToFront(SDL_Window* window) {
     }
     if (w) [w makeKeyAndOrderFront:nil];
 }
+
+void macNoteRecentFile(const std::string& path) {
+    NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]];
+    if (url) [[NSDocumentController sharedDocumentController] noteNewRecentDocumentURL:url];
+}
+
+void macClearRecentFiles() {
+    [[NSDocumentController sharedDocumentController] clearRecentDocuments:nil];
+}

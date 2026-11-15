@@ -6,6 +6,7 @@
 #include "OpenSubtitles.h"
 #include "DurationCache.h"
 #include "Thumbnailer.h"
+#include "RecentFiles.h"
 #include "MacWindow.h"
 #include "Overlay.h"
 
@@ -295,6 +296,7 @@ int main(int argc, char** argv) {
     std::string licenseError;
 
     OpenSubtitles online(configDir, pushWake);
+    RecentFiles recent(configDir);
     trace("OpenSubtitles ready");
 
     {   // About window: versions, license and third-party notices (from the app bundle)
@@ -453,6 +455,7 @@ int main(int argc, char** argv) {
         overlay.setTitlebarOverlay(true, fullscreen);
 #endif
         const Uint64 tfBeforeDraw = SDL_GetTicksNS();
+        overlay.setRecentFiles(st.idle ? &recent.existing() : nullptr);
         OverlayActions act = overlay.draw(st, fullscreen, apView, onlineView, playlistView);
         tfDraw = SDL_GetTicksNS() - tfBeforeDraw;
         // the title bar buttons fade together with the controls
@@ -511,6 +514,7 @@ int main(int argc, char** argv) {
                 }
                 if (fileLoaded) {
                     trace("mpv: file loaded");
+                    recent.add(st.path);
                     player.resetVideoSettings();  // aspect, crop, rotation... start fresh per file
                     overlay.resetVideoSettings();
                     fittedW = fittedH = 0;  // new file: fit again once its size is known
@@ -770,6 +774,8 @@ int main(int argc, char** argv) {
         if (act.toggleMute)        player.toggleMute();
         if (act.toggleFullscreen)  toggleFullscreen();
         if (act.openFile)          showOpenDialog(window);
+        if (!act.openPath.empty()) player.load(act.openPath.c_str());
+        if (act.clearRecent)       recent.clear();
         if (act.seekRelative != 0) {
             if (castActive()) airplay->seek(castStatus.position + act.seekRelative);
             else              player.seekRelative(act.seekRelative);

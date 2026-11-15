@@ -827,7 +827,14 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
         IM_COL32(12, 12, 15, 255), IM_COL32(12, 12, 15, 255));
 
     ImFont* font = ImGui::GetFont();
-    const ImVec2 c{size.x * 0.5f, size.y * 0.5f};
+
+    // recently opened files under the button, as many as fit
+    constexpr float kRowH = 34.0f, kListGap = 36.0f, kHeaderH = 26.0f, kClearH = 40.0f;
+    size_t rows = m_recent ? m_recent->size() : 0;
+    const float room = size.y - 230.0f;  // title, hint, button and margins
+    while (rows > 0 && kListGap + kHeaderH + rows * kRowH + kClearH > room) --rows;
+    const float listH = rows ? kListGap + kHeaderH + rows * kRowH + kClearH : 0.0f;
+    const ImVec2 c{size.x * 0.5f, size.y * 0.5f - listH * 0.5f};
 
     const char* title = "Tolga Player";
     const float titleSize = 40.0f;
@@ -857,6 +864,62 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
                       hov ? IM_COL32(255, 255, 255, 46) : IM_COL32(255, 255, 255, 26), bsize.y * 0.5f);
     dl->AddText({bpos.x + 20, bpos.y + (bsize.y - ls.y) * 0.5f}, IM_COL32(255, 255, 255, 235), label);
     if (hov) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+    if (rows > 0) {
+        const float w = std::min(460.0f, size.x - 60.0f);
+        const float x0 = c.x - w * 0.5f;
+        float y = bpos.y + bsize.y + kListGap;
+        dl->AddText(font, 14.0f, {x0 + 12, y}, IM_COL32(255, 255, 255, 110), "Recent");
+        y += kHeaderH;
+        for (size_t i = 0; i < rows; ++i) {
+            const std::string& path = (*m_recent)[i];
+            const size_t slash = path.find_last_of("/\\");
+            const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
+            std::string folder;
+            if (slash != std::string::npos && slash > 0) {
+                const size_t s2 = path.find_last_of("/\\", slash - 1);
+                folder = path.substr(s2 == std::string::npos ? 0 : s2 + 1, slash - (s2 == std::string::npos ? 0 : s2 + 1));
+            }
+            const ImVec2 r0{x0, y}, r1{x0 + w, y + kRowH - 2};
+            ImGui::PushID(int(i));
+            ImGui::SetCursorScreenPos(r0);
+            if (ImGui::InvisibleButton("##recent", {w, kRowH - 2})) out.openPath = path;
+            const bool rh = ImGui::IsItemHovered();
+            ImGui::PopID();
+            if (rh) {
+                dl->AddRectFilled(r0, r1, IM_COL32(255, 255, 255, 22), 8.0f);
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            }
+            // folder on the right (dim), the file name takes the rest and is cut with "..."
+            const float fw = folder.empty() ? 0.0f : std::min(140.0f, font->CalcTextSizeA(14.0f, FLT_MAX, 0, folder.c_str()).x);
+            const float nameMax = w - 24 - (fw > 0 ? fw + 16 : 0);
+            std::string shown = name;
+            if (font->CalcTextSizeA(15.0f, FLT_MAX, 0, shown.c_str()).x > nameMax) {
+                while (!shown.empty() && font->CalcTextSizeA(15.0f, FLT_MAX, 0, (shown + "...").c_str()).x > nameMax) {
+                    shown.pop_back();
+                    while (!shown.empty() && (static_cast<unsigned char>(shown.back()) & 0xC0) == 0x80) shown.pop_back();
+                }
+                shown += "...";
+            }
+            const float ty = y + (kRowH - 2 - 15.0f) * 0.5f;
+            dl->AddText(font, 15.0f, {x0 + 12, ty}, IM_COL32(255, 255, 255, rh ? 245 : 215), shown.c_str());
+            if (fw > 0) {
+                dl->PushClipRect({x0 + w - 12 - fw, y}, {x0 + w - 12, y + kRowH}, true);
+                dl->AddText(font, 14.0f, {x0 + w - 12 - fw, ty + 1}, IM_COL32(255, 255, 255, 90), folder.c_str());
+                dl->PopClipRect();
+            }
+            y += kRowH;
+        }
+        // "Clear Recent"
+        const char* clearLabel = "Clear Recent";
+        const ImVec2 cs = font->CalcTextSizeA(14.0f, FLT_MAX, 0, clearLabel);
+        const ImVec2 cpos{c.x - cs.x * 0.5f, y + 14};
+        ImGui::SetCursorScreenPos({cpos.x - 8, cpos.y - 5});
+        if (ImGui::InvisibleButton("##clearRecent", {cs.x + 16, cs.y + 10})) out.clearRecent = true;
+        const bool ch = ImGui::IsItemHovered();
+        if (ch) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        dl->AddText(font, 14.0f, cpos, IM_COL32(255, 255, 255, ch ? 200 : 100), clearLabel);
+    }
     ImGui::End();
 }
 

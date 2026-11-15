@@ -163,6 +163,7 @@ add_executable(tolga
   src/OpenSubtitles.cpp
   src/DurationCache.cpp
   src/Thumbnailer.cpp
+  src/RecentFiles.cpp
   src/MpvPlayer.cpp
   src/Overlay.cpp
   src/Ffmpeg.cpp)

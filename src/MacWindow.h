@@ -3,6 +3,8 @@
 // the traffic-light buttons and the title fade in and out together with the controls.
 // No-ops on other platforms.
 
+#include <string>
+
 struct SDL_Window;
 
 #ifdef __APPLE__
@@ -19,7 +21,12 @@ void macHookAboutMenu(void (*onAbout)());
 // system, and when Finder opens a file with the app ("Open With") the window then stays
 // invisible for several seconds while the movie already plays.
 void macBringToFront(SDL_Window* window);
+// The system's recent documents (shown in the app's Dock menu).
+void macNoteRecentFile(const std::string& path);
+void macClearRecentFiles();
 #else
+inline void macNoteRecentFile(const std::string&) {}
+inline void macClearRecentFiles() {}
 inline void macBringToFront(SDL_Window*) {}
 inline void macHookAboutMenu(void (*)()) {}
 inline void macSetupWindow(SDL_Window*) {}
