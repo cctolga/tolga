@@ -239,7 +239,7 @@
         <a class="button primary" data-link="downloadUrl" data-os-label href="#">Download for Mac</a>
         <a class="button ghost" href="#pricing"><span>Get AirPlay support for <span data-text="price">$14.99</span></span></a>
       </div>
-      <p class="fine"><span data-os-fine>Free on your computer. AirPlay free for 14 days. For Apple Silicon Macs with macOS 12 or later; Intel Macs soon.</span>
+      <p class="fine"><span data-os-fine>Free on your computer, forever. AirPlay free for 14 days. For Apple Silicon Macs with macOS 12 or later; Intel Macs soon.</span>
         <a class="alt" data-os-alt href="#">Also for Linux</a></p>
     </div>
 
@@ -394,7 +394,7 @@
       <div class="plan">
         <h3>Tolga Player</h3>
         <div class="price">Free</div>
-        <div class="per">to play on your computer</div>
+        <div class="per">to play on your computer, forever</div>
         <ul>
           <li>Everything on your computer, no time limit</li>
           <li>AirPlay to your Apple TV for 14 days</li>
@@ -437,7 +437,7 @@
       <details><summary>Are my movies uploaded anywhere?</summary>
         <p>No. Tolga Player sends them straight from your computer to your Apple TV over your home network. There is no account and no cloud.</p></details>
       <details><summary>What happens after the 14 days?</summary>
-        <p>Tolga Player keeps playing everything on your computer for free. Sending to the Apple TV asks for a license key, which you get by email when you buy.</p></details>
+        <p>Tolga Player keeps playing everything on your computer for free, forever. Sending to the Apple TV asks for a license key, which you get by email when you buy.</p></details>
       <details><summary>Can I get my money back?</summary>
         <p>Yes, within 30 days of buying, no questions asked. Orders are handled by Paddle, our reseller; see the <a href="refund.html">refund policy</a>.</p></details>
       <details><summary>Is Tolga Player open source?</summary>
@@ -472,7 +472,7 @@
     altUrl = macUrl;
     for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Linux";
     for (const el of document.querySelectorAll("[data-os-fine]"))
-      el.textContent = "Free on your computer. AirPlay free for 14 days. One file for 64-bit Linux: make it executable and open it.";
+      el.textContent = "Free on your computer, forever. AirPlay free for 14 days. One file for 64-bit Linux: make it executable and open it.";
     for (const el of document.querySelectorAll("[data-os-alt]")) el.textContent = "Also for Mac";
   } else if (/Win/.test(navigator.platform || navigator.userAgent)) {
     // no Windows build yet: say so, and keep the Mac and Linux links
