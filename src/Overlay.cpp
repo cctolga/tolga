@@ -1170,9 +1170,40 @@ std::string fileName(const std::string& path) {
     return slash == std::string::npos ? path : path.substr(slash + 1);
 }
 
+// Whether the controls can show `text` properly: every character is in the font, and none
+// belongs to a script that needs shaping or right-to-left layout (Arabic, Hebrew, Persian,
+// Indic, Thai...), which ImGui draws as separate, reversed letters.
+bool displayable(const std::string& text) {
+    ImFont* font = ImGui::GetFont();
+    const auto* p = reinterpret_cast<const unsigned char*>(text.c_str());
+    const auto* end = p + text.size();
+    while (p < end) {
+        unsigned int c = *p;
+        int n = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
+        if (n == 0 || p + n > end) return false;  // not UTF-8
+        if (n > 1) c &= 0xFFu >> (n + 1);
+        for (int i = 1; i < n; ++i) {
+            if ((p[i] & 0xC0) != 0x80) return false;
+            c = (c << 6) | (p[i] & 0x3F);
+        }
+        p += n;
+        if (c > 0xFFFF && sizeof(ImWchar) == 2) return false;  // beyond what this ImGui build stores
+        if ((c >= 0x0590 && c <= 0x0DFF) || (c >= 0x0E00 && c <= 0x0EFF) ||
+            (c >= 0xFB1D && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF))
+            return false;
+        if (c > 0x7F && font && !font->IsGlyphInFont(ImWchar(c)))
+            return false;
+    }
+    return true;
+}
+
 // "No Title (mov_text, Default)" / "Turkish.srt (subrip, External)" / "English (aac, 5.1, Default)"
 std::string trackText(const Track& t) {
     std::string name = !t.title.empty() ? t.title : t.external ? fileName(t.externalFile) : "No Title";
+    if (!displayable(name)) {  // e.g. an Arabic title: show "Arabic" from the language code instead
+        const std::string lang = languageName(t.lang);
+        name = !lang.empty() ? lang : "Track " + std::to_string(t.id);
+    }
     std::vector<std::string> info;
     if (!t.codec.empty()) info.push_back(t.codec);
     if (t.type == "audio" && t.channels > 0)
