@@ -73,8 +73,8 @@ cmake -S "$ROOT" -B "$BUILD" ${GEN[@]+"${GEN[@]}"} \
     -DCMAKE_EXE_LINKER_FLAGS="-Wl,-headerpad_max_install_names" \
     -DTOLGA_SYSTEM_SDL=OFF \
     -DOPENSSL_ROOT_DIR="$PREFIX" -DOPENSSL_USE_STATIC_LIBS=TRUE \
-    -DTOLGA_BUY_URL="${TOLGA_BUY_URL:-}" \
     -DTOLGA_AIRPLAY_DIR="$AIRPLAY_DIR" \
+    ${TOLGA_BUY_URL:+-DTOLGA_BUY_URL="$TOLGA_BUY_URL"} \
     -DCURL_NO_CURL_CMAKE=ON -DCURL_INCLUDE_DIR="$SDK/usr/include" -DCURL_LIBRARY="$SDK/usr/lib/libcurl.tbd"
 cmake --build "$BUILD" --target tolga -j"$(sysctl -n hw.ncpu)"
 PREBUILT_LIB=""
