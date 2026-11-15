@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -29,6 +30,21 @@
 #endif
 
 namespace {
+
+// TOLGA_TRACE=1: timing of the start-up and slow frames, written to /tmp/tolga-trace.log
+// (for "the window appears late" kind of problems; macOS: open --env TOLGA_TRACE=1 -a ...)
+FILE* g_trace = nullptr;
+Uint64 g_traceStart = 0;
+void trace(const char* fmt, ...) {
+    if (!g_trace) return;
+    char msg[256];
+    va_list ap;
+    va_start(ap, fmt);
+    std::vsnprintf(msg, sizeof msg, fmt, ap);
+    va_end(ap);
+    std::fprintf(g_trace, "%9.1f ms  %s\n", (SDL_GetTicksNS() - g_traceStart) / 1e6, msg);
+    std::fflush(g_trace);
+}
 
 std::string readTextFile(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
@@ -166,6 +182,11 @@ static int64_t selectedTrack(const PlayerState& st, const char* type) {
 }
 
 int main(int argc, char** argv) {
+    g_traceStart = SDL_GetTicksNS();
+    if (const char* t = std::getenv("TOLGA_TRACE"); t && *t && *t != '0') {
+        g_trace = std::fopen("/tmp/tolga-trace.log", "w");
+        trace("main, %d argument(s)%s%s", argc - 1, argc > 1 ? ": " : "", argc > 1 ? argv[1] : "");
+    }
 #ifndef _WIN32
     // A TV closing its connection mid-write must not kill the app.
     std::signal(SIGPIPE, SIG_IGN);
@@ -177,6 +198,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
+    trace("SDL_Init done");
     g_wakeEvent = SDL_RegisterEvents(3);
     g_openEvent = g_wakeEvent + 1;
     g_aboutEvent = g_wakeEvent + 2;
@@ -230,6 +252,7 @@ int main(int argc, char** argv) {
     }
     SDL_GL_MakeCurrent(window, gl);
     SDL_GL_SetSwapInterval(1);  // vsync
+    trace("window + OpenGL context ready (%s)", glslVersion);
     SDL_SetWindowMinimumSize(window, 480, 270);
     macSetupWindow(window);  // transparent title bar over the video (macOS only)
     macHookAboutMenu([] {
@@ -239,12 +262,16 @@ int main(int argc, char** argv) {
     });
 
     SDL_ShowWindow(window);
+    macBringToFront(window);
+    trace("SDL_ShowWindow");
 
     MpvPlayer player;
     if (!player.init(getProcAddress, pushWake)) return 1;
+    trace("mpv ready");
 
     Overlay overlay;
     if (!overlay.init(window, gl, glslVersion)) return 1;
+    trace("overlay ready");
 
     // Settings live in the per-user app data folder (~/Library/Application Support/Tolga on
     // macOS, ~/.local/share/Tolga on Linux, %APPDATA%\Tolga on Windows).
@@ -261,12 +288,14 @@ int main(int argc, char** argv) {
     const bool hasAirPlay = airplay != nullptr;
     if (!airplay) airplay = std::make_unique<NoAirPlay>();
     airplay->start();
+    trace("AirPlay module %s, started", hasAirPlay ? "loaded" : "absent");
     std::vector<AirPlayTarget> airplayDevices;
     std::string castTarget;  // selected AirPlay device ID, empty = this computer
     LicenseInfo licenseInfo;
     std::string licenseError;
 
     OpenSubtitles online(configDir, pushWake);
+    trace("OpenSubtitles ready");
 
     {   // About window: versions, license and third-party notices (from the app bundle)
         Overlay::AboutInfo about;
@@ -292,6 +321,7 @@ int main(int argc, char** argv) {
         about.creditsText = readTextFile(base + "THIRD_PARTY_NOTICES.txt");
         overlay.setAbout(std::move(about));
     }
+    trace("About info ready");
     OpenSubtitlesStatus onlineStatus;
     OpenSubtitlesSettings onlineSettings = online.settings();
     DurationCache durations(pushWake);
@@ -379,6 +409,8 @@ int main(int argc, char** argv) {
     // Draws one frame: video first, controls on top. Also called while the window is being
     // resized, when macOS holds the main loop and only an event watch gets to run.
     auto drawFrame = [&]() -> OverlayActions {
+        const Uint64 tf0 = SDL_GetTicksNS();
+        Uint64 tfRender = 0, tfDraw = 0, tfImgui = 0;
         int fbw = 0, fbh = 0;
         float pixelScale = 1.0f;
         if (!macDrawableSize(window, &fbw, &fbh, &pixelScale)) {
@@ -392,6 +424,7 @@ int main(int argc, char** argv) {
 
         const PlayerState& st = player.state();
         if (!st.idle) player.render(0, fbw, fbh);
+        tfRender = SDL_GetTicksNS();
 
         airplayDevices = airplay->devices();
         licenseInfo = airplay->license();
@@ -419,18 +452,39 @@ int main(int argc, char** argv) {
 #ifdef __APPLE__
         overlay.setTitlebarOverlay(true, fullscreen);
 #endif
+        const Uint64 tfBeforeDraw = SDL_GetTicksNS();
         OverlayActions act = overlay.draw(st, fullscreen, apView, onlineView, playlistView);
+        tfDraw = SDL_GetTicksNS() - tfBeforeDraw;
         // the title bar buttons fade together with the controls
         macSetTitlebarAlpha(window, overlay.controlsAlpha());
+        const Uint64 tfBeforeImgui = SDL_GetTicksNS();
         overlay.render();
+        tfImgui = SDL_GetTicksNS() - tfBeforeImgui;
         SDL_GL_SwapWindow(window);
         player.reportSwap();
+        {
+            static int frames = 0;
+            const double total = (SDL_GetTicksNS() - tf0) / 1e6;
+            if (g_trace && (frames < 15 || total > 100)) {
+                ++frames;
+                trace("frame %d: %.0f ms (mpv %.0f, controls %.0f, gl %.0f, swap+rest %.0f) %dx%d px, video %s", frames, total,
+                      (tfRender - tf0) / 1e6, tfDraw / 1e6, tfImgui / 1e6,
+                      total - (tfRender - tf0) / 1e6 - tfDraw / 1e6 - tfImgui / 1e6, fbw, fbh, st.idle ? "idle" : "loaded");
+            }
+        }
         return act;
     };
     std::function<void()> liveDraw = [&] { drawFrame(); };
     SDL_AddEventWatch(liveResizeWatch, &liveDraw);
+    trace("main loop starts");
+    Uint64 lastIter = SDL_GetTicksNS();
 
     while (running) {
+        if (g_trace) {
+            const Uint64 now = SDL_GetTicksNS();
+            if (now - lastIter > 150000000ull) trace("main loop was busy %.0f ms", (now - lastIter) / 1e6);
+            lastIter = now;
+        }
         // Sleep until something happens. While the controls are fading, or ImGui
         // still needs frames, poll instead so animations stay smooth (vsync paces us).
         SDL_Event e;
@@ -439,6 +493,11 @@ int main(int argc, char** argv) {
 
         bool newFrame = false;
         while (gotEvent) {
+            if (g_trace) {
+                static std::map<Uint32, int> seen;
+                if (seen[e.type]++ < 2 && e.type != g_wakeEvent && e.type != SDL_EVENT_MOUSE_MOTION)
+                    trace("event 0x%x%s", unsigned(e.type), e.type == SDL_EVENT_WINDOW_EXPOSED ? " (window exposed: visible on screen)" : "");
+            }
             if (e.type == g_wakeEvent) {
                 bool fileLoaded = false;
                 if (!player.processEvents(fileLoaded)) running = false;
@@ -451,6 +510,7 @@ int main(int argc, char** argv) {
                     startCast(target);
                 }
                 if (fileLoaded) {
+                    trace("mpv: file loaded");
                     player.resetVideoSettings();  // aspect, crop, rotation... start fresh per file
                     overlay.resetVideoSettings();
                     fittedW = fittedH = 0;  // new file: fit again once its size is known
@@ -459,6 +519,7 @@ int main(int argc, char** argv) {
                 // dwidth/dheight can arrive a little after FILE_LOADED. Fit once per file only:
                 // aspect / crop / rotation changes keep the window and letterbox instead.
                 if (st.videoW > 0 && st.videoH > 0 && fittedW == 0) {
+                    trace("video size %dx%d known, fitting the window", st.videoW, st.videoH);
                     fitWindowToVideo(window, st.videoW, st.videoH);
                     fittedW = st.videoW;
                     fittedH = st.videoH;
@@ -493,6 +554,8 @@ int main(int argc, char** argv) {
                     redrawFrames = std::max(redrawFrames, 2);  // draw again once the size has settled
                     break;
                 case SDL_EVENT_DROP_FILE:
+                    trace("drop/open file: %s", e.drop.data ? e.drop.data : "");
+                    macBringToFront(window);  // opened from Finder: show the window now, not seconds later
                     // dropping an .srt onto a playing video adds it as a subtitle
                     if (isSubtitleFile(e.drop.data) && !player.state().idle)
                         player.addSubtitle(e.drop.data);

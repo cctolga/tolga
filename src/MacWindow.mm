@@ -79,3 +79,16 @@ void macHookAboutMenu(void (*onAbout)()) {
         }
     }
 }
+
+void macBringToFront(SDL_Window* window) {
+    NSWindow* w = nsWindowOf(window);
+    if (@available(macOS 14.0, *)) {
+        [NSApp activate];
+    } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        [NSApp activateIgnoringOtherApps:YES];
+#pragma clang diagnostic pop
+    }
+    if (w) [w makeKeyAndOrderFront:nil];
+}

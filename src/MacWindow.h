@@ -15,7 +15,12 @@ void macSetTitlebarAlpha(SDL_Window* window, float alpha);  // 0 = hidden (and n
 bool macDrawableSize(SDL_Window* window, int* w, int* h, float* scale);
 // "About Tolga Player" in the app menu calls `onAbout` instead of the standard panel.
 void macHookAboutMenu(void (*onAbout)());
+// Brings the app and the window to the front. Since macOS 14 SDL leaves activation to the
+// system, and when Finder opens a file with the app ("Open With") the window then stays
+// invisible for several seconds while the movie already plays.
+void macBringToFront(SDL_Window* window);
 #else
+inline void macBringToFront(SDL_Window*) {}
 inline void macHookAboutMenu(void (*)()) {}
 inline void macSetupWindow(SDL_Window*) {}
 inline void macSetTitlebarAlpha(SDL_Window*, float) {}
