@@ -82,6 +82,8 @@ public:
     // events or a new frame. It must be thread-safe (we push an SDL event).
     bool init(GetProcAddressFn getProcAddress, std::function<void()> wakeup);
     void shutdown();
+    // A property as text ("mpv-version", "ffmpeg-version"...), "" if unknown.
+    std::string propertyString(const char* name) const;
 
     void load(const std::string& path);
     void togglePause();

@@ -88,6 +88,7 @@ struct OverlayActions {
     bool        activateLicense = false;
     std::string licenseKey;
     bool        openBuyPage = false;
+    bool        openWebsite = false;
 
     bool        submitPin = false;          // user typed the PIN shown on the TV
     std::string pin;
@@ -167,6 +168,17 @@ public:
     void showSubtitleList() { m_resultsOpen = false; m_accountOpen = false; }
     bool resultsOpen() const { return m_resultsOpen; }
     void openLicenseDialog() { m_licenseOpen = true; m_licenseFirstFrame = true; poke(); }
+    // About window (like IINA's): name, version, mpv/FFmpeg versions, license and credits.
+    struct AboutInfo {
+        std::string version;        // "0.1.0"
+        std::string mpvVersion;     // "mpv v0.41.0"
+        std::string ffmpegVersion;  // "7.1"
+        std::string licenseText;    // the player's license (Apache-2.0)
+        std::string creditsText;    // third-party notices
+    };
+    void setAbout(AboutInfo info);
+    void openAbout() { m_aboutOpen = true; m_aboutTab = 0; poke(); }
+    bool aboutOpen() const { return m_aboutOpen; }
     void closeLicenseDialog() { m_licenseOpen = false; }
     bool licenseOpen() const { return m_licenseOpen; }
     void closeResults() { m_resultsOpen = false; }
@@ -190,6 +202,7 @@ private:
     void drawCastScreen(const PlayerState& st, const CastStatus& cast);
     void drawPinDialog(const CastStatus& cast, OverlayActions& out);
     void drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out);
+    void drawAbout(const AirPlayView& airplay, OverlayActions& out);
     void drawToast();
 
     SDL_Window* m_window = nullptr;
@@ -249,6 +262,10 @@ private:
     bool        m_pinOpen = false;
     bool        m_pinChecking = false;
     bool        m_licenseOpen = false;
+    AboutInfo   m_about;
+    std::string m_licenseReflowed;  // license text with its hard line breaks joined into paragraphs
+    bool        m_aboutOpen = false;
+    int         m_aboutTab = 0;  // 0 license, 1 credits
     bool        m_licenseFirstFrame = false;
     char        m_licenseBuf[512] = {};
 };

@@ -11,6 +11,8 @@
 #include <imgui_impl_sdl3.h>
 
 #include <algorithm>
+#include <cctype>
+#include <sstream>
 #include <cmath>
 #include <functional>
 #include <iterator>
@@ -350,6 +352,7 @@ OverlayActions Overlay::draw(const PlayerState& st, bool fullscreen, const AirPl
     if (wantPin) drawPinDialog(*cast, out);
     else         m_pinOpen = false;
     if (m_licenseOpen && !wantPin) drawLicenseDialog(airplay, out);
+    if (m_aboutOpen && !wantPin && !m_licenseOpen) drawAbout(airplay, out);
     drawToast();
     return out;
 }
@@ -357,7 +360,7 @@ OverlayActions Overlay::draw(const PlayerState& st, bool fullscreen, const AirPl
 bool Overlay::isAnimating() const {
     const bool panelMoving = (m_panelOpen ? m_panelAnim < 1.0f : m_panelAnim > 0.0f) ||
                              (m_playlistOpen ? m_playlistAnim < 1.0f : m_playlistAnim > 0.0f);
-    return m_alpha != m_targetAlpha || m_pinOpen || m_licenseOpen || panelMoving || SDL_GetTicks() < m_toastUntil;
+    return m_alpha != m_targetAlpha || m_pinOpen || m_licenseOpen || m_aboutOpen || panelMoving || SDL_GetTicks() < m_toastUntil;
 }
 
 void Overlay::togglePanel(PanelTab tab) {
@@ -502,6 +505,166 @@ void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {
 }
 
 // ------------------------------------------------------------- license
+
+namespace {
+// The app icon, drawn: a turquoise tile with a white screen, the play mark and the AirPlay
+// triangle (same artwork as resources/macos/icon.svg).
+void drawAppIcon(ImDrawList* dl, ImVec2 o, float s) {
+    auto P = [&](float x, float y) { return ImVec2{o.x + (x - 100.0f) / 824.0f * s, o.y + (y - 100.0f) / 824.0f * s}; };
+    const ImU32 top = IM_COL32(94, 240, 220, 255), bottom = IM_COL32(15, 149, 160, 255);
+    const float r = s * 0.225f;
+    // vertical gradient inside the rounded tile: draw thin rounded bands
+    const int bands = 24;
+    for (int i = 0; i < bands; ++i) {
+        const float t0 = float(i) / bands, t1 = float(i + 1) / bands;
+        const ImVec4 a = ImGui::ColorConvertU32ToFloat4(top), b = ImGui::ColorConvertU32ToFloat4(bottom);
+        const float t = (t0 + t1) * 0.5f;
+        const ImU32 c = ImGui::GetColorU32(ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, 1));
+        ImDrawFlags fl = ImDrawFlags_RoundCornersNone;
+        if (i == 0) fl = ImDrawFlags_RoundCornersTop;
+        if (i == bands - 1) fl = ImDrawFlags_RoundCornersBottom;
+        const float y0 = o.y + s * t0, y1 = o.y + s * t1 + (i == bands - 1 ? 0.0f : 1.0f);
+        dl->AddRectFilled({o.x, y0}, {o.x + s, y1}, c, (i == 0 || i == bands - 1) ? r : 0.0f, fl);
+    }
+    const ImU32 white = IM_COL32(255, 255, 255, 255), teal = IM_COL32(18, 164, 170, 255), coral = IM_COL32(232, 72, 63, 255);
+    // screen (y shifted by 33 like the SVG), with the notch the AirPlay triangle rises into
+    dl->AddRectFilled(P(250, 283), P(774, 633), white, s * 0.073f);
+    const ImU32 notch = ImGui::GetColorU32(ImVec4(0.17f, 0.70f, 0.71f, 1));
+    dl->AddTriangleFilled(P(512, 521), P(612, 640), P(412, 640), notch);
+    dl->AddTriangleFilled(P(464, 352), P(602, 437), P(464, 522), teal);
+    dl->AddTriangleFilled(P(512, 593), P(630, 741), P(394, 741), coral);
+}
+}  // namespace
+
+void Overlay::setAbout(AboutInfo info) {
+    m_about = std::move(info);
+    // License files are wrapped at ~80 columns; join each paragraph so it wraps to the dialog.
+    std::string out, para;
+    std::istringstream in(m_about.licenseText);
+    std::string line;
+    auto flush = [&] {
+        if (para.empty()) return;
+        if (!out.empty()) out += "\n\n";
+        out += para;
+        para.clear();
+    };
+    while (std::getline(in, line)) {
+        size_t b = line.find_first_not_of(" \t\r");
+        if (b == std::string::npos) { flush(); continue; }
+        size_t e = line.find_last_not_of(" \t\r");
+        std::string t = line.substr(b, e - b + 1);
+        // a numbered clause or "(a)" item starts its own paragraph
+        if (!para.empty() && (std::isdigit((unsigned char)t[0]) || t[0] == '(')) flush();
+        if (!para.empty()) para += ' ';
+        para += t;
+    }
+    flush();
+    m_licenseReflowed = out;
+}
+
+void Overlay::drawAbout(const AirPlayView& airplay, OverlayActions& out) {
+    const ImVec2 size = ImGui::GetIO().DisplaySize;
+    // dim the video; a click outside closes
+    ImGui::SetNextWindowPos({0, 0});
+    ImGui::SetNextWindowSize(size);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.45f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::Begin("##about_dim", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
+    if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) m_aboutOpen = false;
+    ImGui::End();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) m_aboutOpen = false;
+    if (!m_aboutOpen) return;
+
+    const ImVec2 dlg{std::min(720.0f, size.x - 40.0f), std::min(430.0f, size.y - 24.0f)};
+    const bool small = dlg.y < 400.0f;  // short window: smaller icon, tighter column
+    ImGui::SetNextWindowPos({(size.x - dlg.x) * 0.5f, (size.y - dlg.y) * 0.5f});
+    ImGui::SetNextWindowSize(dlg);
+    ImGui::SetNextWindowFocus();
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.10f, 0.10f, 0.12f, 0.97f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1, 1, 1, 0.10f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    ImGui::Begin("##about", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                 ImGuiWindowFlags_NoSavedSettings);
+    m_hoveringPanel = true;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 wp = ImGui::GetWindowPos();
+    const float leftW = std::min(250.0f, dlg.x * 0.38f);
+    ImFont* font = ImGui::GetFont();
+    auto centered = [&](const std::string& text, float y, float px, ImU32 color) {
+        const ImVec2 ts = font->CalcTextSizeA(px, FLT_MAX, 0, text.c_str());
+        dl->AddText(font, px, {wp.x + (leftW - ts.x) * 0.5f, wp.y + y}, color, text.c_str());
+    };
+
+    // ---- left: icon, name, versions, the buttons
+    const float iconS = small ? 60.0f : 96.0f;
+    const float y0 = small ? 18.0f : 30.0f;
+    drawAppIcon(dl, {wp.x + (leftW - iconS) * 0.5f, wp.y + y0}, iconS);
+    float ty = y0 + iconS + (small ? 8.0f : 14.0f);
+    centered("Tolga Player", ty, small ? 21.0f : 26.0f, IM_COL32(255, 255, 255, 245));
+    ty += small ? 28.0f : 36.0f;
+    centered(m_about.version.empty() ? std::string() : "Version " + m_about.version, ty, 15.0f, IM_COL32(255, 255, 255, 190));
+    ty += 22.0f;
+    std::string libs = m_about.mpvVersion;
+    if (!m_about.ffmpegVersion.empty()) libs += (libs.empty() ? "" : "   ") + std::string("FFmpeg ") + m_about.ffmpegVersion;
+    centered(libs, ty, 12.5f, IM_COL32(255, 255, 255, 120));
+    ty += 22.0f;
+    centered("\xC2\xA9 2026 Tolga \xC3\x87iftci\xC3\xA7" "elik", ty, 12.5f, IM_COL32(255, 255, 255, 120));  // © 2026 Tolga Çiftciçelik
+    ty += 22.0f;
+    if (const LicenseInfo* lic = airplay.license) {
+        std::string line;
+        using S = LicenseInfo::State;
+        if (lic->state == S::Licensed) line = "Licensed to " + lic->email;
+        else if (lic->state == S::Trial) line = "AirPlay trial: " + std::to_string(lic->trialDaysLeft) + " days left";
+        else if (lic->state == S::Expired) line = "AirPlay trial ended";
+        if (!line.empty()) centered(line, ty, 12.5f, IM_COL32(47, 211, 198, 230));
+    }
+    ty += 30.0f;
+
+    const ImVec2 bsz{leftW - 70.0f, small ? 26.0f : 30.0f};
+    const char* labels[] = {"License", "Credits", "Website"};
+    const float by = std::max(ty, dlg.y - 3 * (bsz.y + 8) - 18);
+    for (int i = 0; i < 3; ++i) {
+        ImGui::SetCursorPos({35.0f, by + i * (bsz.y + 8)});
+        const bool active = i == m_aboutTab;
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.07f, 0.62f, 0.60f, 1.0f) : ImVec4(1, 1, 1, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.11f, 0.70f, 0.67f, 1.0f) : ImVec4(1, 1, 1, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.52f, 0.51f, 1.0f));
+        if (ImGui::Button(labels[i], bsz)) {
+            if (i == 2) out.openWebsite = true;
+            else m_aboutTab = i;
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar();
+    }
+
+    // ---- right: the text, scrolling
+    dl->AddLine({wp.x + leftW, wp.y + 16}, {wp.x + leftW, wp.y + dlg.y - 16}, IM_COL32(255, 255, 255, 20));
+    ImGui::SetCursorPos({leftW + 20.0f, 20.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 8.0f);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0, 0, 0, 0));
+    ImGui::BeginChild(m_aboutTab == 0 ? "##about_license" : "##about_credits", {dlg.x - leftW - 36.0f, dlg.y - 40.0f});
+    const std::string& text = m_aboutTab == 0 ? m_licenseReflowed : m_about.creditsText;
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.78f));
+    ImGui::PushTextWrapPos(0.0f);
+    if (text.empty()) ImGui::TextUnformatted(m_aboutTab == 0 ? "Tolga Player is licensed under the Apache License 2.0."
+                                                             : "The licenses of the libraries Tolga Player uses are in the app bundle.");
+    else ImGui::TextUnformatted(text.c_str(), text.c_str() + text.size());
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+
+    ImGui::End();
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
+}
 
 void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out) {
     const LicenseInfo* lic = airplay.license;

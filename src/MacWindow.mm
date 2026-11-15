@@ -57,3 +57,25 @@ bool macDrawableSize(SDL_Window* window, int* w, int* h, float* scale) {
     *scale = view.bounds.size.width > 0 ? (float)(px.size.width / view.bounds.size.width) : 1.0f;
     return true;
 }
+
+@interface TolgaAboutTarget : NSObject
+@property (nonatomic) void (*callback)(void);
+- (void)showAbout:(id)sender;
+@end
+@implementation TolgaAboutTarget
+- (void)showAbout:(id)sender { (void)sender; if (self.callback) self.callback(); }
+@end
+
+void macHookAboutMenu(void (*onAbout)()) {
+    static TolgaAboutTarget* target = nil;  // menu items don't retain their target
+    if (!target) target = [TolgaAboutTarget new];
+    target.callback = onAbout;
+    NSMenu* appMenu = [[[NSApp mainMenu] itemAtIndex:0] submenu];
+    for (NSMenuItem* item in appMenu.itemArray) {
+        if (item.action == @selector(orderFrontStandardAboutPanel:)) {
+            item.target = target;
+            item.action = @selector(showAbout:);
+            item.title = @"About Tolga Player";
+        }
+    }
+}

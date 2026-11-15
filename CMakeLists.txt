@@ -158,7 +158,8 @@ add_executable(tolga
 target_include_directories(tolga PRIVATE ${TOLGA_API_INCLUDE})
 target_link_libraries(tolga PRIVATE imgui PkgConfig::MPV ${_airplay_lib} CURL::libcurl nlohmann_json::nlohmann_json
                       Threads::Threads)
-target_compile_definitions(tolga PRIVATE TOLGA_WEBSITE="${TOLGA_WEBSITE}")
+target_compile_definitions(tolga PRIVATE TOLGA_WEBSITE="${TOLGA_WEBSITE}" TOLGA_VERSION="${PROJECT_VERSION}"
+                          TOLGA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 # OpenSubtitles API key built into the app, so users are never asked for one.
 # Put the key in a file named "opensubtitles.key" next to this CMakeLists.txt (it is in

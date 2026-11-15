@@ -17,6 +17,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
+#include <fstream>
 #include <functional>
 #include <string>
 #include <map>
@@ -27,6 +29,14 @@
 #endif
 
 namespace {
+
+std::string readTextFile(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return {};
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
+}
 
 // Redraws during a live window resize: macOS runs its own loop then, and SDL reports the new
 // size only through event watchers (SDL_EVENT_WINDOW_EXPOSED with data1 = 1).
@@ -66,6 +76,7 @@ public:
 };
 
 Uint32 g_wakeEvent = 0;  // pushed by mpv threads (new frame / new events)
+Uint32 g_aboutEvent = 0;  // "About Tolga Player" in the macOS app menu
 Uint32 g_openEvent = 0;  // pushed by the file dialog callback (data1 = strdup'ed path,
                          // code 0 = open video, 1 = subtitle, 2 = add to the playlist)
 
@@ -163,8 +174,9 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
-    g_wakeEvent = SDL_RegisterEvents(2);
+    g_wakeEvent = SDL_RegisterEvents(3);
     g_openEvent = g_wakeEvent + 1;
+    g_aboutEvent = g_wakeEvent + 2;
 
     // macOS only gives a modern GL with a 3.2+ core, forward-compatible profile.
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -181,6 +193,11 @@ int main(int argc, char** argv) {
     }
     SDL_SetWindowMinimumSize(window, 480, 270);
     macSetupWindow(window);  // transparent title bar over the video (macOS only)
+    macHookAboutMenu([] {
+        SDL_Event ev{};
+        ev.type = g_aboutEvent;
+        SDL_PushEvent(&ev);
+    });
 
     SDL_GLContext gl = SDL_GL_CreateContext(window);
     if (!gl) {
@@ -217,6 +234,19 @@ int main(int argc, char** argv) {
     std::string licenseError;
 
     OpenSubtitles online(configDir, pushWake);
+
+    {   // About window: versions, license and third-party notices (from the app bundle)
+        Overlay::AboutInfo about;
+        about.version = TOLGA_VERSION;
+        about.mpvVersion = player.propertyString("mpv-version");
+        about.ffmpegVersion = player.propertyString("ffmpeg-version");
+        std::string base;
+        if (const char* b = SDL_GetBasePath()) base = b;  // .../Tolga Player.app/Contents/Resources/
+        about.licenseText = readTextFile(base + "Licenses/Tolga/LICENSE");
+        if (about.licenseText.empty()) about.licenseText = readTextFile(std::string(TOLGA_SOURCE_DIR) + "/LICENSE");
+        about.creditsText = readTextFile(base + "THIRD_PARTY_NOTICES.txt");
+        overlay.setAbout(std::move(about));
+    }
     OpenSubtitlesStatus onlineStatus;
     OpenSubtitlesSettings onlineSettings = online.settings();
     DurationCache durations(pushWake);
@@ -389,6 +419,9 @@ int main(int argc, char** argv) {
                     fittedH = st.videoH;
                 }
                 redrawFrames = std::max(redrawFrames, 1);  // time label etc.
+            } else if (e.type == g_aboutEvent) {
+                overlay.openAbout();
+                redrawFrames = std::max(redrawFrames, 2);
             } else if (e.type == g_openEvent) {
                 char* path = static_cast<char*>(e.user.data1);
                 if (e.user.code == 1)      player.addSubtitle(path);
@@ -605,6 +638,7 @@ int main(int argc, char** argv) {
         const PlayerState& st = player.state();
         if (act.openLicense) { licenseError.clear(); overlay.openLicenseDialog(); }
         if (act.closeLicense) overlay.closeLicenseDialog();
+        if (act.openWebsite) SDL_OpenURL(TOLGA_WEBSITE);
         if (act.openBuyPage) {
             const std::string url = hasAirPlay ? licenseInfo.buyUrl : std::string(TOLGA_WEBSITE);
             if (!url.empty()) SDL_OpenURL(url.c_str());

@@ -13,7 +13,10 @@ void macSetTitlebarAlpha(SDL_Window* window, float alpha);  // 0 = hidden (and n
 // from different moments of the animation; this one always matches what is drawn.
 // Also lets the GL context catch up with a new view size.
 bool macDrawableSize(SDL_Window* window, int* w, int* h, float* scale);
+// "About Tolga Player" in the app menu calls `onAbout` instead of the standard panel.
+void macHookAboutMenu(void (*onAbout)());
 #else
+inline void macHookAboutMenu(void (*)()) {}
 inline void macSetupWindow(SDL_Window*) {}
 inline void macSetTitlebarAlpha(SDL_Window*, float) {}
 inline bool macDrawableSize(SDL_Window*, int*, int*, float*) { return false; }

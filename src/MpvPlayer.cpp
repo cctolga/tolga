@@ -542,3 +542,12 @@ void MpvPlayer::render(int fbo, int width, int height) {
 void MpvPlayer::reportSwap() {
     mpv_render_context_report_swap(m_render);
 }
+
+std::string MpvPlayer::propertyString(const char* name) const {
+    if (!m_mpv) return {};
+    char* v = mpv_get_property_string(m_mpv, name);
+    if (!v) return {};
+    std::string out = v;
+    mpv_free(v);
+    return out;
+}
