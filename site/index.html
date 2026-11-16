@@ -85,7 +85,7 @@
   .hero .lede { font-size: 21px; color: var(--mist); margin: 22px 0 30px; max-width: 34ch; }
   .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
   .hero .fine { font-size: 15px; color: var(--mist); margin: 18px 0 0; }
-  .hero .fine strong { color: var(--paper); font-weight: 600; }
+  .hero .fine strong { display: block; color: var(--paper); font-weight: 600; }
   .hero .fine.sys { margin-top: 4px; }
   .hero .fine .keep { white-space: nowrap; }
   .hero .fine .alt { color: var(--paper); white-space: nowrap; }
@@ -242,8 +242,8 @@
         <a class="button primary" data-link="downloadUrl" data-os-label href="#">Download for Mac</a>
         <a class="button ghost" href="#pricing"><span>Get AirPlay support for <span data-text="price">$14.99</span></span></a>
       </div>
-      <p class="fine"><strong>Free on your computer, forever.</strong> AirPlay free for 14 days.</p>
-      <p class="fine sys" id="os-note">For Apple Silicon Macs, Intel Macs soon.
+      <p class="fine"><strong>Tolga Player is free on your computer, forever.</strong> The AirPlay part is free for 14 days.</p>
+      <p class="fine sys" id="os-note">For Apple Silicon Macs.
         <span data-linux-only class="keep">Also for <a class="alt" data-link="downloadLinux" href="#">Linux</a>.</span></p>
     </div>
 
@@ -474,7 +474,7 @@
     CONFIG.downloadUrl = CONFIG.downloadLinux;
     for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Linux";
     document.getElementById("os-note").innerHTML =
-      'For 64-bit Linux: make the file executable and open it. Also for <a class="alt" href="' + macUrl + '">Mac</a>.';
+      'For 64-bit Linux. Also for <a class="alt" href="' + macUrl + '">Mac</a>.';
   } else if (/Win/.test(navigator.platform || navigator.userAgent)) {
     // no Windows build yet: say so, and offer the Mac and Linux versions
     document.getElementById("os-note").innerHTML = CONFIG.linuxReady
