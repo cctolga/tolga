@@ -1163,8 +1163,8 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
         ImGui::PushID(int(i));
         const bool selected = !d.deviceId.empty() && d.deviceId == airplay.castTarget;
         const bool video = d.video;
-        // name on the left, model in grey on the right
-        if (ImGui::MenuItem(d.name.c_str(), d.model.c_str(), selected, video)) {
+        // name on the left, model in grey on the right; greyed out when this video can't go to a TV
+        if (ImGui::MenuItem(d.name.c_str(), d.model.c_str(), selected, video && airplay.castBlocked.empty())) {
             out.selectCastTarget = true;
             out.castTarget = d.deviceId;
         }
@@ -1172,6 +1172,13 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
             ImGui::SetTooltip("%s%s", d.details.c_str(), video ? "" : "\nAudio only - can't play video");
         }
         ImGui::PopID();
+    }
+
+    if (!airplay.castBlocked.empty() && count > 0) {
+        ImGui::Spacing();
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 250);
+        ImGui::TextDisabled("%s", airplay.castBlocked.c_str());
+        ImGui::PopTextWrapPos();
     }
 
     if (airplay.searching || count == 0) {

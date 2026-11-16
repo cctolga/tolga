@@ -343,6 +343,8 @@ int main(int argc, char** argv) {
     trace("AirPlay module %s, started", hasAirPlay ? "loaded" : "absent");
     std::vector<AirPlayTarget> airplayDevices;
     std::string castTarget;  // selected AirPlay device ID, empty = this computer
+    std::string castBlocked;   // why the open video can't be sent to an Apple TV ("" = it can)
+    std::string castCheckKey;  // file + track count castBlocked was worked out for
     LicenseInfo licenseInfo;
     std::string licenseError;
 
@@ -485,6 +487,24 @@ int main(int argc, char** argv) {
         apView.available = hasAirPlay;
         apView.license = hasAirPlay ? &licenseInfo : nullptr;
         apView.licenseError = licenseError;
+        // grey out the Apple TVs in the AirPlay menu when this video can't be sent (e.g. AV1);
+        // checked again only when the file or its tracks change
+        if (hasAirPlay && !st.idle && !st.tracks.empty() && !castStatus.active()) {
+            const std::string key = st.path + "#" + std::to_string(st.tracks.size());
+            if (key != castCheckKey) {
+                castCheckKey = key;
+                std::vector<CastTrack> tracks;
+                for (const Track& t : st.tracks) {
+                    tracks.push_back({t.id, t.type, t.ffIndex, t.codec, t.lang, t.title, t.externalFile, t.selected});
+                    tracks.back().channels = t.channels;
+                }
+                castBlocked.clear();
+                if (airplay->canCast(st.path, tracks, castBlocked)) castBlocked.clear();
+            }
+            apView.castBlocked = castBlocked;
+        } else if (st.idle) {
+            castCheckKey.clear();
+        }
         onlineStatus = online.status();
         OnlineView onlineView{&onlineStatus, &onlineSettings, OpenSubtitles::queryFromFileName(st.path)};
         // seek-bar previews: start once the file's length and picture size are known

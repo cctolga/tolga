@@ -106,6 +106,7 @@ struct AirPlayView {
     const LicenseInfo* license = nullptr;
     std::string licenseError;          // last activation error, shown in the license dialog
     bool        available = true;      // false: this build has no AirPlay module
+    std::string castBlocked;           // why the open video can't go to an Apple TV ("" = it can)
 };
 
 // What the playlist view needs besides the player state.
