@@ -72,11 +72,14 @@ bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wake
     }
 
     mpv_opengl_init_params glInit{getProcAddress, nullptr};
-    int advanced = 1;  // lets mpv do proper frame timing / display sync
+    // No MPV_RENDER_PARAM_ADVANCED_CONTROL: we render on the main thread, which also makes
+    // ordinary (blocking) mpv calls. With advanced control the core may wait for the render
+    // thread while that thread waits for the core, and both freeze for good (seen while
+    // resizing the window: sound kept playing, picture and app hung). Without it mpv falls
+    // back to short timeouts instead, at the cost of one extra copy per frame.
     mpv_render_param params[] = {
         {MPV_RENDER_PARAM_API_TYPE, const_cast<char*>(MPV_RENDER_API_TYPE_OPENGL)},
         {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &glInit},
-        {MPV_RENDER_PARAM_ADVANCED_CONTROL, &advanced},
         {MPV_RENDER_PARAM_INVALID, nullptr},
     };
     if (mpv_render_context_create(&m_render, m_mpv, params) < 0) {

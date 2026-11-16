@@ -25,6 +25,10 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 #ifndef _WIN32
 #include <csignal>
@@ -101,10 +105,56 @@ void* getProcAddress(void*, const char* name) {
     return reinterpret_cast<void*>(SDL_GL_GetProcAddress(name));
 }
 
+// Wakes the main loop. Called from other threads (mpv's video thread, AirPlay, downloads).
+// They must not push the SDL event themselves: SDL_PushEvent takes SDL's event-watch lock,
+// and while the window is being resized the main thread holds that lock while it waits in
+// mpv_render_context_render for mpv's video thread. If that video thread then pushed the
+// event itself, each would wait for the other forever (sound kept playing, picture and app
+// hung). So callers only raise a flag, and this small thread does the pushing; if it has to
+// wait for the lock, nobody else does.
+class Waker {
+public:
+    void start() { m_thread = std::thread([this] { run(); }); }
+    void stop() {
+        if (!m_thread.joinable()) return;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_quit = true;
+        }
+        m_cv.notify_one();
+        if (m_thread.joinable()) m_thread.join();
+    }
+    ~Waker() { stop(); }  // also covers early returns from main
+    void wake() {
+        if (m_pending.exchange(true)) return;  // a wake-up is already on its way
+        { std::lock_guard<std::mutex> lock(m_mutex); }  // the thread is waiting or will see the flag
+        m_cv.notify_one();
+    }
+
+private:
+    void run() {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        while (!m_quit) {
+            m_cv.wait(lock, [this] { return m_quit || m_pending.load(); });
+            if (m_quit) break;
+            m_pending = false;  // cleared first: a wake during the push sends another event
+            lock.unlock();
+            SDL_Event e{};
+            e.type = g_wakeEvent;
+            SDL_PushEvent(&e);
+            lock.lock();
+        }
+    }
+    std::thread m_thread;
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    std::atomic<bool> m_pending{false};
+    bool m_quit = false;
+};
+Waker g_waker;
+
 void pushWake() {
-    SDL_Event e{};
-    e.type = g_wakeEvent;
-    SDL_PushEvent(&e);
+    g_waker.wake();
 }
 
 void onFileDialog(void* kind, const char* const* files, int) {
@@ -203,6 +253,7 @@ int main(int argc, char** argv) {
     g_wakeEvent = SDL_RegisterEvents(3);
     g_openEvent = g_wakeEvent + 1;
     g_aboutEvent = g_wakeEvent + 2;
+    g_waker.start();
 
     // OpenGL: the newest of these that the graphics driver gives us. macOS only gives a modern GL
     // with a 3.2+ core, forward-compatible profile; older PCs (e.g. Intel graphics before 2011)
@@ -863,6 +914,7 @@ int main(int argc, char** argv) {
     airplay->shutdown();
     overlay.shutdown();
     player.shutdown();  // needs the GL context still alive
+    g_waker.stop();
     SDL_GL_DestroyContext(gl);
     SDL_DestroyWindow(window);
     SDL_Quit();
