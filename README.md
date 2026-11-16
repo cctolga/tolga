@@ -1,7 +1,13 @@
 # Tolga Player
 
-A small, good-looking cross-platform video player.
+A small, good-looking video player for macOS, Windows and Linux that also sends any movie
+to an Apple TV over AirPlay (MKV, DTS, every audio language and subtitle).
 libmpv (playback) + SDL3 (window, GL context, file dialog) + Dear ImGui (controls).
+
+**Download:** [Mac (Apple Silicon)](https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Mac.dmg) ·
+[Windows 10/11](https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Win.exe) ·
+[Linux (AppImage)](https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Linux.AppImage) ·
+[website](https://cctolga.github.io/tolga/)
 
 ![Tolga Player casting to an Apple TV over AirPlay](docs/screenshots/airplay.png)
 
@@ -35,6 +41,11 @@ cmake --build build -j
 
 The distribution's mpv is a GPL build: fine for your own use, but a build you give to others
 uses the LGPL libraries below (`scripts/make-appimage.sh`).
+
+## Build for Windows
+
+Windows builds are cross-compiled on Linux (or WSL) with MinGW-w64; see
+[Windows installer](#windows-installer) below. The result runs on 64-bit Windows 10 and 11.
 
 ## Release build (Tolga Player.app + .dmg)
 
@@ -104,13 +115,13 @@ The Tolga player is open source under the Apache License 2.0 (`LICENSE`, `NOTICE
 Anyone may build, use, change and share it, also in their own products.
 
 AirPlay (playing on an Apple TV) is a separate, **closed-source** module. The player only
-talks to it through `include/tolga/AirPlayApi.h`. On macOS and Linux x86_64, CMake downloads
-the prebuilt module (`libtolga_airplay.dylib`, Apple Silicon + Intel; `libtolga_airplay.so`)
-from this repository's releases and checks it against the SHA-256 in `cmake/AirPlayPrebuilt.cmake`. AirPlay then works for
+talks to it through `include/tolga/AirPlayApi.h`. On macOS, Windows x86_64 and Linux x86_64,
+CMake downloads the prebuilt module (`libtolga_airplay.dylib`, Apple Silicon + Intel;
+`tolga_airplay.dll`; `libtolga_airplay.so`) from this repository's releases and checks it against the SHA-256 in `cmake/AirPlayPrebuilt.cmake`. AirPlay then works for
 14 days and afterwards needs a Tolga license (https://cctolga.github.io/tolga/).
 
-- `-DTOLGA_AIRPLAY_PREBUILT=OFF` builds without AirPlay (also the case on Windows for now,
-  and on Linux until the Linux module is published); the AirPlay menu then points to the official app.
+- `-DTOLGA_AIRPLAY_PREBUILT=OFF` builds without AirPlay (also on other systems, e.g. Linux on
+  ARM); the AirPlay menu then points to the official app.
 - The download happens once per build folder; offline, the build continues without AirPlay.
 
 ## Controls
@@ -123,8 +134,8 @@ from this repository's releases and checks it against the SHA-256 in `cmake/AirP
 | M                   | Mute                     |
 | F, double-click     | Toggle fullscreen        |
 | Esc                 | Leave fullscreen         |
-| Cmd+O               | Open file                |
-| Cmd+Q               | Quit                     |
+| Cmd+O / Ctrl+O      | Open file                |
+| Cmd+Q / Ctrl+Q      | Quit                     |
 | Drag & drop         | Open file (.srt etc. is added as subtitle) |
 | V                   | Show / hide subtitles    |
 | J                   | Next subtitle track      |
@@ -156,7 +167,9 @@ Pick an Apple TV and the current video continues there from the same position:
   two stay in step. The subtitle delay reaches the TV too.
 
 On macOS the first start may ask for **Local Network** access (for Terminal, if you
-start it from there). Allow it, otherwise no devices are found.
+start it from there). Allow it, otherwise no devices are found. On Windows the firewall may
+ask whether Tolga Player may use private networks: allow it, the Apple TV fetches the video
+from Tolga Player.
 
 ## Window
 
@@ -219,7 +232,7 @@ the daily download limit. The settings are stored in
 subtitles go to its `Subtitles/` folder.
 
 Building needs libcurl (included with macOS; on Linux `libcurl4-openssl-dev`, or the static
-one from `scripts/build-deps.sh`).
+one from `scripts/build-deps.sh`, which on Windows uses the system's TLS, Schannel).
 
 ## Troubleshooting
 
@@ -235,4 +248,7 @@ one from `scripts/build-deps.sh`).
 - `cmake/AirPlayPrebuilt.cmake`  version, URL and SHA-256 of the prebuilt AirPlay module
 - `src/AirPlayNone.cpp`  stand-in when the build has no AirPlay module
 - `src/main.cpp`     window, event loop, keyboard shortcuts
+- `src/Subprocess.h`, `src/Paths.h`  running ffmpeg/ffprobe and UTF-8 paths on every system
+- `resources/windows/`  icon, manifest, version info and installer (NSIS) for Windows
+- `scripts/build-deps.sh`, `make-app.sh`, `make-windows.sh`, `make-appimage.sh`  release builds
 - `tests/fake/fake_opensubtitles.py`  fake OpenSubtitles API for testing
