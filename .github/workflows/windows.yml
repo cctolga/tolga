@@ -1,0 +1,70 @@
+# Windows installer (Tolga-Player-Win.exe) and zip, cross-compiled on Linux with MinGW-w64.
+# A tag v* attaches them to that release; a manual run keeps them as a workflow artifact.
+name: Windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build tools and the MinGW cross compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-posix mingw-w64-tools \
+            nasm pkg-config ninja-build cmake nsis zip python3-pip curl
+          pip3 install --user --break-system-packages "meson>=1.6,<2"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Cache LGPL libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps/windows-x86_64
+            deps/src
+          key: deps-windows-x86_64-mingw-${{ hashFiles('scripts/build-deps.sh') }}
+
+      - name: LGPL libraries (mpv, FFmpeg, ...)
+        env:
+          TOLGA_TARGET: windows
+          # uchardet (subtitle charset detection) isn't cross-built yet; subtitles default to cp1254/UTF-8
+          TOLGA_SKIP_UCHARDET: "1"
+        run: scripts/build-deps.sh
+
+      - name: OpenSubtitles key (repository secret OPENSUBTITLES_KEY)
+        env:
+          KEY: ${{ secrets.OPENSUBTITLES_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then printf '%s' "$KEY" > opensubtitles.key
+          else echo "::warning::OPENSUBTITLES_KEY secret missing: online subtitle search needs the user's own key"; fi
+
+      - name: Installer and zip
+        env:
+          # a release must have AirPlay (the prebuilt module for Windows has to be published first)
+          TOLGA_REQUIRE_AIRPLAY: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '' }}
+        run: scripts/make-windows.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tolga-Player-Win
+          path: |
+            dist/Tolga-Player-Win.exe
+            dist/Tolga-Player-Win.zip
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --title "Tolga Player ${TAG#v}" --notes "Tolga Player ${TAG#v}"
+          gh release upload "$TAG" dist/Tolga-Player-Win.exe dist/Tolga-Player-Win.zip --clobber

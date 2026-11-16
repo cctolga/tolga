@@ -1,4 +1,5 @@
 #include "OpenSubtitles.h"
+#include "Paths.h"
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -82,7 +83,7 @@ OpenSubtitles::OpenSubtitles(std::string configDir, std::function<void()> wake)
     m_settingsPath = m_configDir + "opensubtitles.json";
     m_settings.builtInKey = kBuiltInKey[0] != 0;
     try {
-        std::ifstream in(m_settingsPath);
+        std::ifstream in(utf8Path(m_settingsPath));
         if (in) {
             const json j = json::parse(in);
             m_settings.apiKey = j.value("api_key", "");
@@ -125,7 +126,7 @@ void OpenSubtitles::saveSettings(const OpenSubtitlesSettings& s) {
     const json j = {{"api_key", s.apiKey}, {"username", s.username}, {"password", s.password},
                     {"languages", s.languages}};
     {
-        std::ofstream out(m_settingsPath, std::ios::trunc);
+        std::ofstream out(utf8Path(m_settingsPath), std::ios::trunc);
 #ifndef _WIN32
         chmod(m_settingsPath.c_str(), 0600);  // holds the account password
 #endif
@@ -180,7 +181,7 @@ void OpenSubtitles::worker() {
 // ================================================================== helpers
 
 std::string OpenSubtitles::queryFromFileName(const std::string& path) {
-    std::string name = fs::path(path).stem().string();
+    std::string name = utf8String(utf8Path(path).stem());
     name = std::regex_replace(name, std::regex(R"(\[[^\]]*\]|\([^)]*\))"), " ");
     for (char& c : name)
         if (c == '.' || c == '_') c = ' ';
@@ -203,7 +204,7 @@ std::string OpenSubtitles::queryFromFileName(const std::string& path) {
 }
 
 std::string OpenSubtitles::movieHash(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(utf8Path(path), std::ios::binary);
     if (!f) return {};
     f.seekg(0, std::ios::end);
     const uint64_t size = uint64_t(f.tellg());
@@ -512,13 +513,13 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
             return finish(false, "Download failed while fetching the file", {});
 
         std::error_code ec;
-        const fs::path dir = fs::path(m_configDir) / "Subtitles" / std::to_string(sub.fileId);
+        const fs::path dir = utf8Path(m_configDir) / "Subtitles" / std::to_string(sub.fileId);
         fs::create_directories(dir, ec);
         if (fileName.empty()) fileName = "subtitle.srt";
         const fs::path out = dir / safeFileName(fileName);
         std::ofstream(out, std::ios::binary | std::ios::trunc) << data;
         std::string msg = "Added " + fileName;
         if (!remaining.empty()) msg += " (" + remaining + " downloads left today)";
-        finish(true, msg, out.string());
+        finish(true, msg, utf8String(out));
     });
 }

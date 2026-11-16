@@ -1,4 +1,5 @@
 #include "Ffmpeg.h"
+#include "Subprocess.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -50,25 +51,6 @@ std::string executableDir() {
     return (cec ? fs::path(path) : canon).parent_path().string();
 }
 
-// one argument for the shell
-std::string quote(const std::string& s) {
-#ifdef _WIN32
-    std::string out = "\"";
-    for (char c : s) {
-        if (c == '"') out += '\\';
-        out += c;
-    }
-    return out + "\"";
-#else
-    std::string out = "'";
-    for (char c : s) {
-        if (c == '\'') out += "'\\''";
-        else out += c;
-    }
-    return out + "'";
-#endif
-}
-
 }  // namespace
 
 std::string findProgram(const std::string& name) {
@@ -102,23 +84,18 @@ std::string findFfmpeg() {
 double probeDuration(const std::string& path) {
     const std::string ffprobe = findProgram("ffprobe");
     if (ffprobe.empty()) return -1;
-    std::string cmd = quote(ffprobe) + " -v error -show_entries format=duration -of csv=p=0 " + quote(path);
-#ifdef _WIN32
-    cmd = "\"" + cmd + "\"";  // cmd.exe strips one pair of outer quotes
-    FILE* p = _popen(cmd.c_str(), "r");
-#else
-    cmd += " 2>/dev/null";
-    FILE* p = popen(cmd.c_str(), "r");
-#endif
-    if (!p) return -1;
-    char line[128] = {};
-    const bool got = std::fgets(line, sizeof line, p) != nullptr;
-#ifdef _WIN32
-    const int rc = _pclose(p);
-#else
-    const int rc = pclose(p);
-#endif
-    if (!got || rc != 0) return -1;
-    const double d = std::atof(line);
+    tolga_sub::Process proc;
+    if (!proc.start({ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path})) return -1;
+    std::string out;
+    char buf[256];
+    for (int idle = 0; idle < 100;) {  // gives up after ~20 s without output
+        const long n = proc.read(buf, sizeof buf, 200);
+        if (n == 0) break;
+        if (n < 0) { ++idle; continue; }
+        out.append(buf, size_t(n));
+    }
+    if (proc.running()) proc.terminate();
+    if (proc.wait() != 0 || out.empty()) return -1;
+    const double d = std::atof(out.c_str());
     return d > 0 ? d : -1;
 }

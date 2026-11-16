@@ -8,6 +8,9 @@
 #          Linux (Debian/Ubuntu): apt install meson ninja-build nasm pkg-config cmake libva-dev libdrm-dev
 #            libasound2-dev libpulse-dev
 #            libfontconfig-dev
+#          Windows: in an MSYS2 UCRT64 shell (pacman -S mingw-w64-ucrt-x86_64-{toolchain,meson,ninja,nasm,
+#            pkgconf,cmake} make git), or cross from Linux with TOLGA_TARGET=windows
+#            (apt install g++-mingw-w64-x86-64-posix mingw-w64-tools meson ninja-build nasm cmake)
 # Output:  deps/<os>-<arch>/prefix/{lib,include,bin}, deps/<os>-<arch>/licenses/, versions.txt
 #
 # Every library is built as a shared library, so each LGPL part can be replaced by the user.
@@ -30,6 +33,11 @@ CURL_TAG=curl-8_23_0
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
+CROSS=""   # tool prefix when cross-compiling (Windows from Linux)
+case "$OS" in mingw*|msys*|ucrt*|cygwin*) OS=windows ;; esac
+if [ "${TOLGA_TARGET:-}" = windows ] && [ "$OS" != windows ]; then
+    OS=windows ARCH=x86_64 CROSS=x86_64-w64-mingw32
+fi
 OUT="${TOLGA_DEPS:-$ROOT/deps/$OS-$ARCH}"
 PREFIX="$OUT/prefix"
 SRC="$ROOT/deps/src"
@@ -49,10 +57,50 @@ if [ "$OS" = darwin ]; then
     export CFLAGS="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET ${CFLAGS:-}"
     export LDFLAGS="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -Wl,-headerpad_max_install_names ${LDFLAGS:-}"
 fi
+if [ "$OS" = windows ]; then
+    export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"   # nothing from the build machine
+    # the C/C++ runtime goes into each DLL, so the app needs no MinGW DLLs next to it
+    export LDFLAGS="-static-libgcc -static-libstdc++ ${LDFLAGS:-}"
+    if [ -n "$CROSS" ]; then
+        CC="$CROSS-gcc" CXX="$CROSS-g++"
+        command -v "$CROSS-gcc-posix" >/dev/null && CC="$CROSS-gcc-posix" CXX="$CROSS-g++-posix"
+        export CC CXX AR="$CROSS-ar" RANLIB="$CROSS-ranlib" STRIP="$CROSS-strip" WINDRES="$CROSS-windres" NM="$CROSS-nm"
+        cat > "$OUT/cross.meson" <<MESONEOF
+[binaries]
+c = '$CC'
+cpp = '$CXX'
+ar = '$AR'
+strip = '$STRIP'
+windres = '$WINDRES'
+pkg-config = 'pkg-config'
+[properties]
+pkg_config_libdir = '$PREFIX/lib/pkgconfig'
+[host_machine]
+system = 'windows'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'
+MESONEOF
+        cat > "$OUT/cross.cmake" <<CMAKEEOF
+set(CMAKE_SYSTEM_NAME Windows)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+set(CMAKE_C_COMPILER $CC)
+set(CMAKE_CXX_COMPILER $CXX)
+set(CMAKE_RC_COMPILER $WINDRES)
+set(CMAKE_FIND_ROOT_PATH /usr/$CROSS $PREFIX)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+CMAKEEOF
+    fi
+fi
+CMAKE_CROSS=()
+[ -n "$CROSS" ] && CMAKE_CROSS=(-DCMAKE_TOOLCHAIN_FILE="$OUT/cross.cmake")
 export CPPFLAGS="-I$PREFIX/include ${CPPFLAGS:-}"
 export LDFLAGS="-L$PREFIX/lib ${LDFLAGS:-}"
 
 MESON_COMMON=(--prefix="$PREFIX" --libdir=lib --buildtype=release -Ddefault_library=shared --wrap-mode=nodownload)
+[ -n "$CROSS" ] && MESON_COMMON+=(--cross-file="$OUT/cross.meson")
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 done_mark() { [ -f "$OUT/.done-$1" ]; }
@@ -106,6 +154,7 @@ if ! done_mark openssl; then
     case "$OS-$ARCH" in
         darwin-arm64)  OSSL_TARGET=(darwin64-arm64-cc "-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET") ;;
         darwin-x86_64) OSSL_TARGET=(darwin64-x86_64-cc "-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET") ;;
+        windows-*)     OSSL_TARGET=(mingw64) ;;
         *)             OSSL_TARGET=(-fPIC) ;;   # linked into shared libraries (FFmpeg, AirPlay module)
     esac
     (cd "$SRC/openssl" && { make clean >/dev/null 2>&1 || true; } &&
@@ -115,22 +164,25 @@ if ! done_mark openssl; then
 fi
 license openssl "$SRC/openssl/LICENSE.txt"
 
-# ---------------------------------------------------------------- curl (curl license), Linux only, static
+# ---------------------------------------------------------------- curl (curl license), Linux and Windows, static
 # HTTPS only, on the static OpenSSL: the system libcurl drags in dozens of libraries that
-# differ between distributions (macOS uses the one in the SDK)
-if [ "$OS" = linux ]; then
+# differ between distributions (macOS uses the one in the SDK). On Windows TLS comes from the
+# system (Schannel), which also knows the system's certificates.
+if [ "$OS" = linux ] || [ "$OS" = windows ]; then
+    if [ "$OS" = windows ]; then CURL_TLS=(-DCURL_USE_SCHANNEL=ON -DCURL_USE_OPENSSL=OFF -DCURL_ZLIB=OFF)
+    else CURL_TLS=(-DCURL_USE_OPENSSL=ON -DOPENSSL_ROOT_DIR="$PREFIX" -DOPENSSL_USE_STATIC_LIBS=ON -DCURL_ZLIB=ON); fi
     fetch_git curl https://github.com/curl/curl.git "$CURL_TAG"
     version curl "$CURL_TAG" "curl License (MIT-style, static)  https://curl.se"
     if ! done_mark curl; then
         log curl
         (cd "$SRC/curl" && rm -rf _build &&
-         cmake -S . -B _build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-               -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+         cmake -S . -B _build -G Ninja ${CMAKE_CROSS[@]+"${CMAKE_CROSS[@]}"} -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+               -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_POSITION_INDEPENDENT_CODE=ON "${CURL_TLS[@]}" \
                -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON -DBUILD_CURL_EXE=OFF -DBUILD_TESTING=OFF \
                -DBUILD_LIBCURL_DOCS=OFF -DBUILD_MISC_DOCS=OFF -DENABLE_CURL_MANUAL=OFF -DBUILD_EXAMPLES=OFF \
-               -DHTTP_ONLY=ON -DCURL_USE_OPENSSL=ON -DOPENSSL_ROOT_DIR="$PREFIX" -DOPENSSL_USE_STATIC_LIBS=ON \
+               -DHTTP_ONLY=ON \
                -DCURL_USE_LIBPSL=OFF -DUSE_LIBIDN2=OFF -DCURL_USE_LIBSSH2=OFF -DCURL_USE_LIBSSH=OFF \
-               -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF -DUSE_NGHTTP2=OFF -DCURL_ZLIB=ON -DCURL_DISABLE_LDAP=ON \
+               -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF -DUSE_NGHTTP2=OFF -DCURL_DISABLE_LDAP=ON \
                -DCURL_USE_GSSAPI=OFF -DENABLE_ARES=OFF -DCURL_CA_BUNDLE=none -DCURL_CA_PATH=none &&
          cmake --build _build -j"$JOBS" && cmake --install _build)
         mark curl
@@ -172,6 +224,8 @@ if ! done_mark libass; then
     log libass
     if [ "$OS" = darwin ]; then
         meson_build libass -Dfontconfig=disabled -Dcoretext=enabled -Drequire-system-font-provider=false -Dtest=disabled
+    elif [ "$OS" = windows ]; then
+        meson_build libass -Dfontconfig=disabled -Ddirectwrite=enabled -Drequire-system-font-provider=false -Dtest=disabled
     else
         meson_build libass -Drequire-system-font-provider=false -Dtest=disabled
     fi
@@ -186,7 +240,7 @@ if [ "${TOLGA_SKIP_UCHARDET:-0}" != 1 ]; then
     if ! done_mark uchardet; then
         log uchardet
         (cd "$SRC/uchardet" && rm -rf _build &&
-         cmake -S . -B _build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+         cmake -S . -B _build -G Ninja ${CMAKE_CROSS[@]+"${CMAKE_CROSS[@]}"} -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
                -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_BINARY=OFF -DBUILD_STATIC=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
                -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-}" \
                -DCMAKE_INSTALL_NAME_DIR="$PREFIX/lib" &&
@@ -196,9 +250,9 @@ if [ "${TOLGA_SKIP_UCHARDET:-0}" != 1 ]; then
     license uchardet "$SRC/uchardet/COPYING"
 fi
 
-# ---------------------------------------------------------------- nv-codec-headers (MIT), Linux only
+# ---------------------------------------------------------------- nv-codec-headers (MIT), Linux and Windows
 # headers only: FFmpeg loads the NVIDIA driver at run time, nothing is linked
-if [ "$OS" = linux ]; then
+if [ "$OS" = linux ] || [ "$OS" = windows ]; then
     fetch_git nv-codec-headers https://github.com/FFmpeg/nv-codec-headers.git "$NVCODEC_TAG"
     version nv-codec-headers "$NVCODEC_TAG" "MIT (headers only)  https://github.com/FFmpeg/nv-codec-headers"
     done_mark nvcodec || { log nv-codec-headers; make -C "$SRC/nv-codec-headers" PREFIX="$PREFIX" install && mark nvcodec; }
@@ -211,8 +265,14 @@ if ! done_mark ffmpeg; then
     log ffmpeg
     FF_OPTS=(--prefix="$PREFIX" --enable-shared --disable-static --disable-doc --disable-debug
              --disable-ffplay --disable-avdevice --enable-pic
-             --disable-autodetect --enable-libdav1d --enable-zlib --enable-iconv --enable-pthreads)
-    if [ "$OS" = darwin ]; then
+             --disable-autodetect --enable-libdav1d)
+    [ "$OS" = windows ] || FF_OPTS+=(--enable-zlib --enable-iconv --enable-pthreads)
+    if [ "$OS" = windows ]; then
+        # D3D11/DXVA2 (any GPU) and NVDEC copy-back decoding, TLS from Windows (Schannel)
+        FF_OPTS+=(--target-os=mingw32 --arch=x86_64 --enable-w32threads --enable-d3d11va --enable-dxva2
+                  --enable-ffnvcodec --enable-nvdec --enable-schannel --pkg-config-flags=--static)
+        [ -n "$CROSS" ] && FF_OPTS+=(--cross-prefix="$CROSS-" --cc="$CC" --cxx="$CXX" --pkg-config=pkg-config --enable-cross-compile)
+    elif [ "$OS" = darwin ]; then
         FF_OPTS+=(--enable-videotoolbox --enable-audiotoolbox --enable-securetransport
                   --install-name-dir="$PREFIX/lib"
                   --extra-cflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
@@ -229,11 +289,15 @@ if ! done_mark ffmpeg; then
 fi
 # refuse to continue with a GPL FFmpeg
 # (DYLD/LD_LIBRARY_PATH: the libraries are found even if the project folder was moved)
-ff() { DYLD_LIBRARY_PATH="$PREFIX/lib" LD_LIBRARY_PATH="$PREFIX/lib" "$PREFIX/bin/ffmpeg" "$@"; }
-if ff -hide_banner -buildconf 2>/dev/null | grep -Eq -- '--enable-(gpl|nonfree)'; then
+ff() { DYLD_LIBRARY_PATH="$PREFIX/lib" LD_LIBRARY_PATH="$PREFIX/lib" PATH="$PREFIX/bin:$PATH" "$PREFIX/bin/ffmpeg" "$@"; }
+if [ -n "$CROSS" ]; then
+    # can't run Windows programs here: check the configuration FFmpeg wrote instead
+    grep -q '^#define CONFIG_GPL 0' "$SRC/ffmpeg/config.h" && grep -q '^#define CONFIG_NONFREE 0' "$SRC/ffmpeg/config.h" ||
+        { echo "FFmpeg was configured with --enable-gpl/--enable-nonfree: not shippable"; exit 1; }
+elif ff -hide_banner -buildconf 2>/dev/null | grep -Eq -- '--enable-(gpl|nonfree)'; then
     echo "FFmpeg was configured with --enable-gpl/--enable-nonfree: not shippable"; exit 1
 fi
-ff -hide_banner -L 2>/dev/null | grep -q "Lesser General Public License" ||
+[ -n "$CROSS" ] || ff -hide_banner -L 2>/dev/null | grep -q "Lesser General Public License" ||
     { echo "FFmpeg does not report the LGPL license"; exit 1; }
 license ffmpeg "$SRC/ffmpeg/COPYING.LGPLv2.1" "$SRC/ffmpeg/LICENSE.md"
 
@@ -271,7 +335,14 @@ if ! done_mark mpv; then
               -Dsdl2-gamepad=disabled -Dvulkan=disabled -Dshaderc=disabled -Dspirv-cross=disabled
               -Dlibavdevice=disabled -Dmanpage-build=disabled -Dhtml-build=disabled -Dpdf-build=disabled)
     if [ "${TOLGA_SKIP_UCHARDET:-0}" = 1 ]; then MPV_OPTS+=(-Duchardet=disabled); else MPV_OPTS+=(-Duchardet=enabled); fi
-    if [ "$OS" = darwin ]; then
+    if [ "$OS" = windows ]; then
+        # drawn through the render API too; WASAPI sound; decoding copies frames back (d3d11va-copy)
+        MPV_OPTS+=(-Dgl=enabled -Dplain-gl=enabled -Dgl-win32=disabled -Dd3d11=disabled -Ddirect3d=disabled
+                   -Degl-angle=disabled -Degl-angle-lib=disabled -Degl-angle-win32=disabled -Dd3d-hwaccel=disabled
+                   -Dd3d9-hwaccel=disabled -Dgl-dxinterop=disabled -Dgl-dxinterop-d3d9=disabled
+                   -Dcuda-hwaccel=disabled -Dcuda-interop=disabled -Dwasapi=enabled -Dopenal=disabled
+                   -Dlibcurl=disabled -Dsixel=disabled -Dcaca=disabled)
+    elif [ "$OS" = darwin ]; then
         MPV_OPTS+=(-Dswift-build=enabled -Dmacos-cocoa-cb=disabled -Dmacos-media-player=disabled
                    -Dcocoa=enabled -Dcoreaudio=enabled -Daudiounit=disabled -Dgl-cocoa=enabled
                    -Dvideotoolbox-gl=enabled -Dvideotoolbox-pl=disabled)

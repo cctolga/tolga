@@ -272,7 +272,28 @@ void Overlay::shutdown() {
 }
 
 void Overlay::processEvent(const SDL_Event& e) {
-    ImGui_ImplSDL3_ProcessEvent(&e);
+    if (m_uiScale != 1.0f) {
+        // the controls are laid out in scaled units: mouse positions in window pixels -> those
+        SDL_Event s = e;
+        const float k = 1.0f / m_uiScale;
+        switch (s.type) {
+        case SDL_EVENT_MOUSE_MOTION:
+            s.motion.x *= k; s.motion.y *= k; s.motion.xrel *= k; s.motion.yrel *= k;
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            s.button.x *= k; s.button.y *= k;
+            break;
+        case SDL_EVENT_MOUSE_WHEEL:
+            s.wheel.mouse_x *= k; s.wheel.mouse_y *= k;
+            break;
+        default:
+            break;
+        }
+        ImGui_ImplSDL3_ProcessEvent(&s);
+    } else {
+        ImGui_ImplSDL3_ProcessEvent(&e);
+    }
     if (e.type == SDL_EVENT_MOUSE_MOTION || e.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
         e.type == SDL_EVENT_MOUSE_WHEEL)
         poke();
@@ -292,8 +313,9 @@ OverlayActions Overlay::draw(const PlayerState& st, bool fullscreen, const AirPl
     ImGui_ImplSDL3_NewFrame();
     if (m_fbW > 0 && m_fbH > 0) {  // same size as the video below, even mid-resize
         ImGuiIO& io = ImGui::GetIO();
-        io.DisplaySize = {m_fbW / m_fbScale, m_fbH / m_fbScale};
-        io.DisplayFramebufferScale = {m_fbScale, m_fbScale};
+        const float k = m_fbScale * m_uiScale;
+        io.DisplaySize = {m_fbW / k, m_fbH / k};
+        io.DisplayFramebufferScale = {k, k};
     }
     ImGui::NewFrame();
 

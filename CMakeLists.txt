@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Tolga VERSION 0.1.1 LANGUAGES C CXX)
+project(Tolga VERSION 0.1.2 LANGUAGES C CXX)
 if(APPLE)
   enable_language(OBJCXX)   # must come right after project(), before any target (Ninja needs it)
 endif()
@@ -69,7 +69,7 @@ pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
 # AirPlay is a separate, closed-source module; the player only knows the interface in
 # include/tolga/AirPlayApi.h. Where it comes from, in this order:
 #   1. TOLGA_AIRPLAY_DIR: the module's private source folder (the author's builds)
-#   2. the prebuilt library (macOS, Linux x86_64): downloaded once from this repository's releases and
+#   2. the prebuilt library (macOS, Linux x86_64, Windows x86_64): downloaded once from this repository's releases and
 #      checked against the SHA-256 in cmake/AirPlayPrebuilt.cmake. AirPlay then works for a
 #      14-day trial and afterwards needs a Tolga license.
 #      TOLGA_AIRPLAY_PREBUILT_FILE uses a local package instead (any OS, for testing).
@@ -86,6 +86,8 @@ if(APPLE)
   set(_prebuilt_key macos)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
   set(_prebuilt_key linux_x86_64)
+elseif(WIN32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+  set(_prebuilt_key windows_x86_64)
 else()
   set(_prebuilt_key none)
 endif()
@@ -104,6 +106,9 @@ elseif(TOLGA_AIRPLAY_PREBUILT AND (TOLGA_AIRPLAY_PREBUILT_FILE OR TOLGA_AIRPLAY_
   if(APPLE)
     set(_prebuilt_name libtolga_airplay.dylib)
     set(_prebuilt_soname "@rpath/libtolga_airplay.dylib")
+  elseif(WIN32)
+    set(_prebuilt_name tolga_airplay.dll)
+    set(_prebuilt_soname "")
   else()
     set(_prebuilt_name libtolga_airplay.so)
     set(_prebuilt_soname libtolga_airplay.so)
@@ -145,6 +150,9 @@ elseif(TOLGA_AIRPLAY_PREBUILT AND (TOLGA_AIRPLAY_PREBUILT_FILE OR TOLGA_AIRPLAY_
       IMPORTED_LOCATION ${_dir}/lib/${_prebuilt_name}
       IMPORTED_SONAME "${_prebuilt_soname}"
       INTERFACE_INCLUDE_DIRECTORIES ${TOLGA_API_INCLUDE})
+    if(WIN32)  # linked through its import library, the DLL goes next to the .exe
+      set_target_properties(tolga_airplay_prebuilt PROPERTIES IMPORTED_IMPLIB ${_dir}/lib/libtolga_airplay.dll.a)
+    endif()
     set(_airplay_lib tolga_airplay_prebuilt)
     set(TOLGA_AIRPLAY_PREBUILT_DIR ${_dir} CACHE INTERNAL "")
     message(STATUS "AirPlay: prebuilt closed-source module (${_dir})")
@@ -190,6 +198,17 @@ else()
   message(STATUS "OpenSubtitles: built-in API key from the build")
 endif()
 target_compile_definitions(tolga PRIVATE TOLGA_OPENSUBTITLES_KEY="${_os_key}")
+
+if(WIN32)
+  # a window app (no console), "Tolga Player.exe" with the icon and version info
+  set_target_properties(tolga PROPERTIES WIN32_EXECUTABLE ON OUTPUT_NAME "Tolga Player")
+  set(TOLGA_RC_DIR ${CMAKE_SOURCE_DIR}/resources/windows)
+  configure_file(resources/windows/tolga.rc.in ${CMAKE_BINARY_DIR}/tolga.rc @ONLY)
+  target_sources(tolga PRIVATE ${CMAKE_BINARY_DIR}/tolga.rc)
+  set_source_files_properties(${CMAKE_BINARY_DIR}/tolga.rc PROPERTIES
+    OBJECT_DEPENDS "${TOLGA_RC_DIR}/tolga.ico;${TOLGA_RC_DIR}/tolga.manifest")
+  target_link_options(tolga PRIVATE -static-libgcc -static-libstdc++)
+endif()
 
 if(APPLE)
   target_sources(tolga PRIVATE src/MacWindow.mm)

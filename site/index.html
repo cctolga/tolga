@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tolga Player: every movie on your Apple TV over AirPlay, from your Mac or Linux PC</title>
-<meta name="description" content="Tolga Player is a video player for Mac and Linux that sends any movie to your Apple TV over AirPlay, including MKV and DTS files, with every audio language and subtitle.">
+<title>Tolga Player: every movie on your Apple TV over AirPlay, from your Mac or PC</title>
+<meta name="description" content="Tolga Player is a video player for Mac, Windows and Linux that sends any movie to your Apple TV over AirPlay, including MKV and DTS files, with every audio language and subtitle.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Tolga Player">
 <meta property="og:url" content="https://cctolga.github.io/tolga/">
 <meta property="og:title" content="Tolga Player: every movie on your Apple TV over AirPlay">
-<meta property="og:description" content="Send any movie from your Mac or Linux PC to your Apple TV, including MKV and DTS files, with every audio language and subtitle.">
+<meta property="og:description" content="Send any movie from your Mac or PC to your Apple TV, including MKV and DTS files, with every audio language and subtitle.">
 <meta property="og:image" content="https://cctolga.github.io/tolga/shots/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -28,6 +28,7 @@
     // Linux visitors get the AppImage once it is published (set linuxReady to true then)
     linuxReady: true,
     downloadLinux: "https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Linux.AppImage",
+    downloadWindows: "https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Win.exe",
     buyUrl: "#pricing",                       // fallback if Paddle isn't set up
     // Paddle checkout: sandbox token starts with "test_", live with "live_"
     paddleToken: "test_0e56babf0a68e23ff84999667cc",
@@ -251,14 +252,14 @@
   <header class="hero">
     <div>
       <h1>Every movie, on your Apple&nbsp;TV.</h1>
-      <p class="lede">Tolga Player sends any movie from your Mac or Linux PC to your Apple TV over AirPlay. MP4 and MOV go as they are, and it also plays the MKV and DTS files the Apple TV can't open on its own. Every audio language and subtitle comes along.</p>
+      <p class="lede">Tolga Player sends any movie from your Mac or PC to your Apple TV over AirPlay. MP4 and MOV go as they are, and it also plays the MKV and DTS files the Apple TV can't open on its own. Every audio language and subtitle comes along.</p>
       <div class="actions">
         <a class="button primary" data-link="downloadUrl" data-os-label href="#">Download for Mac</a>
         <a class="button ghost" href="#pricing"><span>Get AirPlay support for <span data-text="price">$14.99</span></span></a>
       </div>
       <p class="fine"><strong>Tolga Player is open source and free on your computer, forever.</strong> The AirPlay part is free for 14 days.</p>
       <p class="fine sys" id="os-note">For Apple Silicon Macs.
-        <span data-linux-only class="keep">Also for <a class="alt" data-link="downloadLinux" href="#">Linux</a>.</span></p>
+        <span class="keep">Also for <a class="alt" data-link="downloadWindows" href="#">Windows</a> and <a class="alt" data-link="downloadLinux" href="#">Linux</a>.</span></p>
     </div>
 
     <div class="room" id="room" aria-label="Tolga Player on a Mac sending a movie to an Apple TV" role="img">
@@ -389,8 +390,8 @@
       </div>
       <div class="feature">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="13" height="9" rx="1.5"/><path d="M1.5 16h16"/><path d="M19 8a4 4 0 0 1 0 6M21.5 6a7.5 7.5 0 0 1 0 10"/></svg>
-        <h3>AirPlay, finally on Linux</h3>
-        <p>A Linux PC can't send anything to an Apple TV on its own, not even by mirroring the screen. Tolga Player can. A Windows version is coming soon.</p>
+        <h3>AirPlay, finally cross-platform</h3>
+        <p>A Windows or Linux PC can't send anything to an Apple TV on its own, not even by mirroring the screen. Tolga Player can, from any of them.</p>
       </div>
       <div class="feature">
         <svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/></svg>
@@ -435,7 +436,7 @@
         <ul>
           <li>AirPlay to every Apple TV in your home</li>
           <li>MKV, DTS and every track on the TV</li>
-          <li>One key for all your Macs and Linux PCs</li>
+          <li>One key for all your Macs and PCs</li>
           <li>30-day refund, <a href="refund.html">no questions asked</a></li>
         </ul>
         <a class="button primary" data-link="buyUrl" href="#">Get AirPlay support</a>
@@ -451,9 +452,11 @@
       <details><summary>Which Apple TV do I need?</summary>
         <p>An Apple TV with tvOS 26 or later, on the same network as your computer. Tolga Player finds it on its own.</p></details>
       <details><summary>Which computers does it run on?</summary>
-        <p>Macs with Apple Silicon (M1 and later) and macOS 12 or later, and 64-bit PCs with Linux: Ubuntu 22.04, Debian 12, Fedora 36 or newer, and most other distributions since 2022. Versions for Intel Macs and Windows are coming soon.</p></details>
+        <p>Macs with Apple Silicon (M1 and later) and macOS 12 or later, 64-bit PCs with Windows 10 or 11, and 64-bit PCs with Linux: Ubuntu 22.04, Debian 12, Fedora 36 or newer, and most other distributions since 2022. A version for Intel Macs is coming soon.</p></details>
+      <details><summary>How do I install it on Windows?</summary>
+        <p>Download Tolga-Player-Win.exe and open it; it installs for your user account only, so it doesn't ask for an administrator password. Because Tolga Player is new, Windows may say "Windows protected your PC": click <b>More info</b>, then <b>Run anyway</b>. Afterwards Tolga Player is in the Start menu, and in "Open with" when you right-click a video. <a href="https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Win.exe">Download for Windows</a></p></details>
       <details><summary>How do I install it on Linux?</summary>
-        <p>There is nothing to install: the Linux version is a single file (AppImage). Download it, make it executable (right-click &gt; Properties, or <code>chmod +x</code>) and open it. AirPlay and the license work the same as on a Mac, and one license key covers both. <a href="https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Linux.AppImage">Download for Linux</a></p></details>
+        <p>There is nothing to install: the Linux version is a single file (AppImage). Download it, make it executable (right-click &gt; Properties, or <code>chmod +x</code>) and open it. AirPlay and the license work the same as on a Mac or Windows, and one license key covers all of them. <a href="https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Linux.AppImage">Download for Linux</a></p></details>
       <details><summary>Does it lower the picture quality?</summary>
         <p>No. The picture is sent exactly as it is in the file, 4K and all. Only sound the Apple TV can't play, like DTS or TrueHD, is converted, to Dolby Digital Plus with the 5.1 channels kept.</p></details>
       <details><summary>Can't I just mirror my screen?</summary>
@@ -485,7 +488,7 @@
       </div>
     </div>
     <p>Tolga Player is made by Tolga Çiftciçelik, Istanbul, Türkiye. Orders are processed by Paddle.com, our reseller and Merchant of Record.</p>
-    <p>Apple, Apple TV, AirPlay, Mac and macOS are trademarks of Apple Inc. Tolga Player is not affiliated with or endorsed by Apple Inc. Linux is a registered trademark of Linus Torvalds.</p>
+    <p>Apple, Apple TV, AirPlay, Mac and macOS are trademarks of Apple Inc. Tolga Player is not affiliated with or endorsed by Apple Inc. Linux is a registered trademark of Linus Torvalds. Windows is a trademark of Microsoft Corporation.</p>
   </div>
 </footer>
 
@@ -522,12 +525,13 @@
     CONFIG.downloadUrl = CONFIG.downloadLinux;
     for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Linux";
     document.getElementById("os-note").innerHTML =
-      'For 64-bit Linux. Also for <a class="alt" href="' + macUrl + '">Mac</a>.';
+      'For 64-bit Linux. Also for <a class="alt" href="' + macUrl + '">Mac</a> and <a class="alt" href="' + CONFIG.downloadWindows + '">Windows</a>.';
   } else if (/Win/.test(navigator.platform || navigator.userAgent)) {
-    // no Windows build yet: say so, and offer the Mac and Linux versions
-    document.getElementById("os-note").innerHTML = CONFIG.linuxReady
-      ? 'Windows version coming soon. Available now for <a class="alt" href="' + macUrl + '">Mac</a> and <a class="alt" href="' + CONFIG.downloadLinux + '">Linux</a>.'
-      : 'Windows version coming soon. Available now for <a class="alt" href="' + macUrl + '">Mac</a>.';
+    // Windows: the installer first, Mac and Linux as the other choices
+    CONFIG.downloadUrl = CONFIG.downloadWindows;
+    for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Windows";
+    document.getElementById("os-note").innerHTML =
+      'For Windows 10 and 11 (64-bit). Also for <a class="alt" href="' + macUrl + '">Mac</a> and <a class="alt" href="' + CONFIG.downloadLinux + '">Linux</a>.';
   }
   if (!CONFIG.linuxReady) for (const el of document.querySelectorAll("[data-linux-only]")) el.remove();
   for (const a of document.querySelectorAll("[data-link]")) a.href = CONFIG[a.dataset.link];

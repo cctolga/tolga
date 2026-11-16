@@ -1,5 +1,6 @@
 #include "RecentFiles.h"
 #include "MacWindow.h"
+#include "Paths.h"
 
 #include <SDL3/SDL.h>
 
@@ -15,7 +16,7 @@ RecentFiles::RecentFiles(std::string configDir) {
 void RecentFiles::load() {
     m_paths.clear();
     if (m_file.empty()) return;
-    std::ifstream in(m_file);
+    std::ifstream in(utf8Path(m_file));
     std::string line;
     while (std::getline(in, line) && m_paths.size() < kMax) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
@@ -27,12 +28,12 @@ void RecentFiles::save() const {
     if (m_file.empty()) return;
     const std::string tmp = m_file + ".tmp";
     {
-        std::ofstream out(tmp, std::ios::trunc);
+        std::ofstream out(utf8Path(tmp), std::ios::trunc);
         for (const std::string& p : m_paths) out << p << '\n';
         if (!out) return;
     }
     std::error_code ec;
-    std::filesystem::rename(tmp, m_file, ec);
+    std::filesystem::rename(utf8Path(tmp), utf8Path(m_file), ec);
 }
 
 void RecentFiles::add(const std::string& path) {
@@ -60,7 +61,7 @@ const std::vector<std::string>& RecentFiles::existing() {
         m_existing.clear();
         for (const std::string& p : m_paths) {
             std::error_code ec;
-            if (std::filesystem::is_regular_file(std::filesystem::path(p), ec)) m_existing.push_back(p);
+            if (std::filesystem::is_regular_file(utf8Path(p), ec)) m_existing.push_back(p);
         }
     }
     return m_existing;

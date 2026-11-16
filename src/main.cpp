@@ -9,9 +9,13 @@
 #include "RecentFiles.h"
 #include "MacWindow.h"
 #include "Overlay.h"
+#include "Paths.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
+#ifdef _WIN32
+#include <SDL3/SDL_main.h>  // WinMain -> main, with UTF-8 arguments
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -52,7 +56,7 @@ void trace(const char* fmt, ...) {
 }
 
 std::string readTextFile(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(utf8Path(path), std::ios::binary);
     if (!f) return {};
     std::stringstream ss;
     ss << f.rdbuf();
@@ -197,6 +201,20 @@ void showOpenDialog(SDL_Window* window, bool add = false) {
 }
 
 // Resize the window to the video's aspect ratio, fitting within 75% of the screen.
+// How much bigger the controls are drawn than at 100 %: Windows and X11 report window sizes in
+// pixels and leave scaling to the app (150 %, 200 % in the display settings). macOS and Wayland
+// already work in points, so there it is 1.
+float uiScale(SDL_Window* window) {
+#ifdef __APPLE__
+    (void)window;
+    return 1.0f;
+#else
+    const float display = SDL_GetWindowDisplayScale(window), density = SDL_GetWindowPixelDensity(window);
+    if (display <= 0 || density <= 0) return 1.0f;
+    return std::clamp(display / density, 1.0f, 4.0f);
+#endif
+}
+
 void fitWindowToVideo(SDL_Window* window, int vw, int vh) {
     if (vw <= 0 || vh <= 0) return;
     if (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) return;
@@ -205,10 +223,12 @@ void fitWindowToVideo(SDL_Window* window, int vw, int vh) {
 
     // dwidth/dheight are in video pixels; on Retina one window point is several pixels,
     // so we just fit by aspect ratio within the usable area.
+    // (Windows at 200 %: a video pixel is two screen pixels, as on a Retina Mac)
+    const float ui = uiScale(window);
     const float maxW = usable.w * 0.75f, maxH = usable.h * 0.75f;
-    const float scale = std::min({maxW / vw, maxH / vh, 1.0f});
-    const int w = std::max(480, int(vw * scale));
-    const int h = std::max(270, int(w * float(vh) / vw));
+    const float scale = std::min({maxW / (vw * ui), maxH / (vh * ui), 1.0f}) * ui;
+    const int w = std::max(int(480 * ui), int(vw * scale));
+    const int h = std::max(int(270 * ui), int(w * float(vh) / vw));
 
     SDL_SetWindowAspectRatio(window, float(vw) / vh, float(vw) / vh);
     SDL_SetWindowSize(window, w, h);
@@ -235,7 +255,7 @@ static int64_t selectedTrack(const PlayerState& st, const char* type) {
 int main(int argc, char** argv) {
     g_traceStart = SDL_GetTicksNS();
     if (const char* t = std::getenv("TOLGA_TRACE"); t && *t && *t != '0') {
-        g_trace = std::fopen("/tmp/tolga-trace.log", "w");
+        g_trace = std::fopen(utf8String(std::filesystem::temp_directory_path() / "tolga-trace.log").c_str(), "w");
         trace("main, %d argument(s)%s%s", argc - 1, argc > 1 ? ": " : "", argc > 1 ? argv[1] : "");
     }
 #ifndef _WIN32
@@ -288,6 +308,8 @@ int main(int argc, char** argv) {
         gl = SDL_GL_CreateContext(window);
         if (gl) {
             glslVersion = v.glsl;
+            if (const float ui = uiScale(window); ui > 1.01f)  // the first size in points, as on macOS
+                SDL_SetWindowSize(window, int(960 * ui), int(540 * ui));
             break;
         }
         glError += "\n  OpenGL " + std::to_string(v.major) + "." + std::to_string(v.minor) + ": " + SDL_GetError();
@@ -486,7 +508,7 @@ int main(int argc, char** argv) {
             SDL_GetWindowSizeInPixels(window, &fbw, &fbh);
             pixelScale = SDL_GetWindowPixelDensity(window);
         }
-        overlay.setFramebuffer(fbw, fbh, pixelScale);
+        overlay.setFramebuffer(fbw, fbh, pixelScale, uiScale(window));
         glViewport(0, 0, fbw, fbh);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -933,7 +955,8 @@ int main(int argc, char** argv) {
         if (overlay.controlsShown() && !st.idle) {
             int winW = 0, winH = 0;
             SDL_GetWindowSize(window, &winW, &winH);
-            if (winH > 0) wantPos = std::clamp(100 - int(100.0f * Overlay::controlsHeight() / winH), 50, 100);
+            if (winH > 0)
+                wantPos = std::clamp(100 - int(100.0f * Overlay::controlsHeight() * uiScale(window) / winH), 50, 100);
         }
         if (wantPos != subPos) {
             player.setSubPos(wantPos);

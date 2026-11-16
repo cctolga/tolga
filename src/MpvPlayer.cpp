@@ -25,8 +25,11 @@ namespace {
 // NVIDIA: NVDEC straight to OpenGL. Intel/AMD: VA-API, copied back to the CPU; the LGPL
 // libmpv has no X11/Wayland code for handing VA-API frames to OpenGL directly.
 const char* const kHwdecMode = "nvdec,vaapi-copy,auto-copy-safe";
+#elif defined(_WIN32)
+// D3D11 (any GPU) or NVDEC, copied back: this libmpv draws through OpenGL without D3D interop
+const char* const kHwdecMode = "auto-copy-safe";
 #else
-const char* const kHwdecMode = "auto-safe";   // VideoToolbox on macOS, D3D11 on Windows
+const char* const kHwdecMode = "auto-safe";   // VideoToolbox
 #endif
 }  // namespace
 

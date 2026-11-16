@@ -158,7 +158,11 @@ public:
     void setRecentFiles(const std::vector<std::string>* recent) { m_recent = recent; }
     // The drawable the frame is rendered into (pixels) and its pixels per point; the
     // controls are laid out for exactly this size.
-    void setFramebuffer(int w, int h, float scale) { m_fbW = w; m_fbH = h; m_fbScale = scale > 0 ? scale : 1.0f; }
+    // scale: pixels per window unit (Retina 2); ui: how much bigger the controls are drawn
+    // (Windows at 150 % display scaling: 1.5), mouse positions are divided by it too
+    void setFramebuffer(int w, int h, float scale, float ui = 1.0f) {
+        m_fbW = w; m_fbH = h; m_fbScale = scale > 0 ? scale : 1.0f; m_uiScale = ui > 0 ? ui : 1.0f;
+    }
 
     // Side panel with video / audio / subtitle tracks (IINA-style), sliding in from the right.
     enum class PanelTab { Video, Audio, Subtitles };
@@ -236,6 +240,7 @@ private:
     bool        m_chaptersTab = false;
     int         m_fbW = 0, m_fbH = 0;
     float       m_fbScale = 1.0f;
+    float       m_uiScale = 1.0f;  // see setFramebuffer
     int         m_playlistSelected = -1;
     int         m_dragFrom = -1;     // playlist row being dragged
     int         m_aspectIdx = 0;

@@ -7,16 +7,12 @@
 #include <chrono>
 #include <cstdio>
 
-#ifdef _WIN32
-#include <stdio.h>
-#else
-#include <csignal>
-#include <fcntl.h>
-#include <spawn.h>
-#include <sys/wait.h>
-#include <unistd.h>
-extern char** environ;
-#endif
+#include "Paths.h"
+#include "Subprocess.h"
+
+#include <fstream>
+
+#include <filesystem>
 
 namespace {
 constexpr int kThumbWidth = 240;
@@ -96,38 +92,9 @@ void Thumbnailer::run(std::string path, double duration, uint64_t gen) {
         return gen != m_gen;
     };
 
-#ifdef _WIN32
-    std::string cmd = "\"";
-    for (size_t i = 0; i < args.size(); ++i) cmd += (i ? " \"" : "\"") + args[i] + "\"";
-    cmd += " 2>NUL\"";
-    FILE* p = _popen(cmd.c_str(), "rb");
-    if (!p) return;
-    std::vector<uint8_t> frame(frameBytes);
-    while (!cancelled() && std::fread(frame.data(), 1, frameBytes, p) == frameBytes) {
-        { std::lock_guard<std::mutex> lock(m_mutex); if (gen == m_gen) m_frames.push_back(frame); }
-        if (m_wake) m_wake();
-    }
-    _pclose(p);
-#else
-    int out[2];
-    if (pipe(out) != 0) return;
-    posix_spawn_file_actions_t fa;
-    posix_spawn_file_actions_init(&fa);
-    posix_spawn_file_actions_adddup2(&fa, out[1], STDOUT_FILENO);
-    posix_spawn_file_actions_addclose(&fa, out[0]);
-    posix_spawn_file_actions_addclose(&fa, out[1]);
-    const std::string logPath = "/tmp/tolga-thumbnails.log";
-    posix_spawn_file_actions_addopen(&fa, STDERR_FILENO, logPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    posix_spawn_file_actions_addopen(&fa, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
-    std::vector<char*> argv;
-    for (const std::string& a : args) argv.push_back(const_cast<char*>(a.c_str()));
-    argv.push_back(nullptr);
-    pid_t pid = 0;
-    const int rc = posix_spawn(&pid, ffmpeg.c_str(), &fa, nullptr, argv.data(), environ);
-    posix_spawn_file_actions_destroy(&fa);
-    close(out[1]);
-    if (rc != 0) {
-        close(out[0]);
+    const std::string logPath = utf8String(std::filesystem::temp_directory_path() / "tolga-thumbnails.log");
+    tolga_sub::Process proc;
+    if (!proc.start(args, logPath)) {
         std::fprintf(stderr, "[thumbs] could not start %s\n", ffmpeg.c_str());
         return;
     }
@@ -138,11 +105,12 @@ void Thumbnailer::run(std::string path, double duration, uint64_t gen) {
     uint64_t lastWake = 0;
     for (;;) {
         if (cancelled()) {
-            kill(pid, SIGTERM);
+            proc.terminate();
             break;
         }
-        const ssize_t n = read(out[0], frame.data() + have, frameBytes - have);
-        if (n <= 0) break;
+        const long n = proc.read(reinterpret_cast<char*>(frame.data()) + have, frameBytes - have, 200);
+        if (n == 0) break;
+        if (n < 0) continue;
         have += size_t(n);
         if (have == frameBytes) {
             {
@@ -153,9 +121,7 @@ void Thumbnailer::run(std::string path, double duration, uint64_t gen) {
             if (m_wake && ++lastWake % 8 == 0) m_wake();
         }
     }
-    close(out[0]);
-    int status = 0;
-    waitpid(pid, &status, 0);
+    proc.wait();
     size_t count;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -166,16 +132,12 @@ void Thumbnailer::run(std::string path, double duration, uint64_t gen) {
         if (count == 0) {
             // show why: the last line ffmpeg wrote
             std::string last;
-            if (FILE* f = std::fopen(logPath.c_str(), "r")) {
-                char line[512];
-                while (std::fgets(line, sizeof line, f)) last = line;
-                std::fclose(f);
-            }
+            std::ifstream f(utf8Path(logPath));
+            for (std::string line; std::getline(f, line);) last = line;
             std::fprintf(stderr, "[thumbs] no previews; ffmpeg said: %s\n", last.empty() ? "(nothing)" : last.c_str());
         } else {
             std::fprintf(stderr, "[thumbs] %zu previews ready in %.1f s\n", count, secs);
         }
     }
     if (m_wake) m_wake();
-#endif
 }

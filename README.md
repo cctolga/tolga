@@ -75,8 +75,24 @@ The AppImage carries its libraries in `usr/lib`; only what must match the user's
 the distribution. It runs on distributions with the same or a newer glibc than the build
 machine, so release builds are made on Ubuntu 22.04 by `.github/workflows/linux.yml`:
 a tag `v*` attaches `Tolga-Player-Linux.AppImage` to that release. Release files keep the
-same name in every version (`Tolga-Player-Mac.dmg`, `Tolga-Player-Linux.AppImage`), so the
-website's `releases/latest/download/...` links always point to the newest one.
+same name in every version (`Tolga-Player-Mac.dmg`, `Tolga-Player-Win.exe`,
+`Tolga-Player-Linux.AppImage`), so the website's `releases/latest/download/...` links always
+point to the newest one.
+
+### Windows installer
+
+Cross-compiled on Linux with MinGW-w64 (no Windows machine needed for the build):
+
+```sh
+sudo apt install g++-mingw-w64-x86-64-posix mingw-w64-tools nsis zip meson ninja-build nasm cmake
+TOLGA_TARGET=windows scripts/build-deps.sh   # once: the LGPL libraries as Windows DLLs
+scripts/make-windows.sh                      # dist/Tolga-Player-Win.exe (installer) and .zip
+```
+
+The installer (NSIS) installs for the current user only, into
+`%LOCALAPPDATA%\Programs\Tolga Player`, without administrator rights, and adds Tolga Player to
+the Start menu and to "Open with" for video files. `.github/workflows/windows.yml` builds it
+on every tag `v*` and attaches `Tolga-Player-Win.exe` and `Tolga-Player-Win.zip` to that release.
 
 Other knobs: `TOLGA_BUY_URL` (shop page behind "Buy Tolga"), `TOLGA_SOURCE_URL` (where the
 source is, for the notices), `TOLGA_BUNDLE_ID` (default `app.tolga.player`), `MACOSX_DEPLOYMENT_TARGET`
