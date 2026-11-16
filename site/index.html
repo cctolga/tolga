@@ -84,7 +84,10 @@
   .hero h1 { font-size: clamp(44px, 5.5vw, 72px); font-weight: 700; letter-spacing: -0.03em; }
   .hero .lede { font-size: 21px; color: var(--mist); margin: 22px 0 30px; max-width: 34ch; }
   .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  .hero .fine { font-size: 15px; color: var(--mist); margin-top: 16px; }
+  .hero .fine { font-size: 15px; color: var(--mist); margin: 18px 0 0; }
+  .hero .fine strong { color: var(--paper); font-weight: 600; }
+  .hero .fine.sys { margin-top: 4px; }
+  .hero .fine .keep { white-space: nowrap; }
   .hero .fine .alt { color: var(--paper); white-space: nowrap; }
 
   /* the room: an Apple TV picture on the wall, Tolga on a Mac in front */
@@ -239,8 +242,9 @@
         <a class="button primary" data-link="downloadUrl" data-os-label href="#">Download for Mac</a>
         <a class="button ghost" href="#pricing"><span>Get AirPlay support for <span data-text="price">$14.99</span></span></a>
       </div>
-      <p class="fine"><span data-os-fine>Free on your computer, forever. AirPlay free for 14 days. For Apple Silicon Macs with macOS 12 or later; Intel Macs soon.</span>
-        <a class="alt" data-os-alt href="#">Also for Linux</a></p>
+      <p class="fine"><strong>Free on your computer, forever.</strong> AirPlay free for 14 days.</p>
+      <p class="fine sys" id="os-note">For Apple Silicon Macs, Intel Macs soon.
+        <span data-linux-only class="keep">Also for <a class="alt" data-link="downloadLinux" href="#">Linux</a>.</span></p>
     </div>
 
     <div class="room" id="room" aria-label="Tolga Player on a Mac sending a movie to an Apple TV" role="img">
@@ -466,22 +470,18 @@
 <script>
   // Linux (not Android): the AppImage first, the Mac disk image as the other choice
   const macUrl = CONFIG.downloadUrl;
-  let altUrl = CONFIG.downloadLinux;
   if (CONFIG.linuxReady && /Linux/.test(navigator.platform || navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
     CONFIG.downloadUrl = CONFIG.downloadLinux;
-    altUrl = macUrl;
     for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Linux";
-    for (const el of document.querySelectorAll("[data-os-fine]"))
-      el.textContent = "Free on your computer, forever. AirPlay free for 14 days. One file for 64-bit Linux: make it executable and open it.";
-    for (const el of document.querySelectorAll("[data-os-alt]")) el.textContent = "Also for Mac";
+    document.getElementById("os-note").innerHTML =
+      'For 64-bit Linux: make the file executable and open it. Also for <a class="alt" href="' + macUrl + '">Mac</a>.';
   } else if (/Win/.test(navigator.platform || navigator.userAgent)) {
-    // no Windows build yet: say so, and keep the Mac and Linux links
-    for (const el of document.querySelectorAll("[data-os-fine]"))
-      el.textContent = "Windows version coming soon. Available now for Apple Silicon Macs and 64-bit Linux.";
+    // no Windows build yet: say so, and offer the Mac and Linux versions
+    document.getElementById("os-note").innerHTML = CONFIG.linuxReady
+      ? 'Windows version coming soon. Available now for <a class="alt" href="' + macUrl + '">Mac</a> and <a class="alt" href="' + CONFIG.downloadLinux + '">Linux</a>.'
+      : 'Windows version coming soon. Available now for <a class="alt" href="' + macUrl + '">Mac</a>.';
   }
-  for (const a of document.querySelectorAll("[data-os-alt]")) {
-    if (CONFIG.linuxReady) a.href = altUrl; else a.remove();
-  }
+  if (!CONFIG.linuxReady) for (const el of document.querySelectorAll("[data-linux-only]")) el.remove();
   for (const a of document.querySelectorAll("[data-link]")) a.href = CONFIG[a.dataset.link];
   for (const a of document.querySelectorAll("[data-mail]")) { a.href = "mailto:" + CONFIG[a.dataset.mail]; a.textContent = CONFIG[a.dataset.mail]; }
   for (const el of document.querySelectorAll("[data-text]")) el.textContent = CONFIG[el.dataset.text];
