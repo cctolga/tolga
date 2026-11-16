@@ -38,13 +38,13 @@
 </script>
 <style>
   :root {
-    --night: #0c1c21;     /* the dark living room */
-    --dusk: #13303a;      /* raised surfaces */
-    --line: #234850;
-    --glow: #2fd3c6;      /* Tolga Player's turquoise */
-    --screen: #ffc27a;    /* warm light from the TV */
-    --paper: #e7f4f1;
-    --mist: #98b7b3;
+    --night: #ffffff;     /* page background */
+    --dusk: #f1f5f6;      /* raised surfaces */
+    --line: #dbe4e6;
+    --glow: #08847c;      /* Tolga Player's turquoise */
+    --screen: #a85a12;    /* warm light from the TV */
+    --paper: #0e1d22;
+    --mist: #566e72;
     --radius-big: 22px;
     --radius-small: 10px;
     font-family: "Schibsted Grotesk", system-ui, sans-serif;
@@ -74,7 +74,7 @@
   .button { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 999px; font-weight: 700;
             font-size: 17px; text-decoration: none; border: 1px solid transparent; transition: background .15s, border-color .15s; }
   .button.primary { background: var(--paper); color: var(--night); }
-  .button.primary:hover { background: #fff; }
+  .button.primary:hover { background: #22383e; }
   .button.ghost { border-color: var(--line); color: var(--paper); }
   .button.ghost:hover { border-color: var(--mist); }
   nav .button { padding: 9px 16px; font-size: 15px; }
@@ -178,7 +178,7 @@
   /* ---------- pricing ---------- */
   .pricing .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 40px; border: 1px solid var(--line); border-radius: var(--radius-big); overflow: hidden; }
   .plan { padding: 36px 38px; }
-  .plan + .plan { border-left: 1px solid var(--line); background: linear-gradient(180deg, rgba(47,211,198,.13), rgba(47,211,198,0) 70%); }
+  .plan + .plan { border-left: 1px solid var(--line); background: linear-gradient(180deg, rgba(8,132,124,.08), rgba(8,132,124,0) 70%); }
   .plan .price { font-size: 56px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; margin: 14px 0 6px; }
   .plan .per { color: var(--mist); font-size: 16px; margin-bottom: 22px; }
   .plan ul { padding: 0; margin: 0 0 28px; list-style: none; }
