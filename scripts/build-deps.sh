@@ -72,6 +72,7 @@ cpp = '$CXX'
 ar = '$AR'
 strip = '$STRIP'
 windres = '$WINDRES'
+dlltool = '$CROSS-dlltool'
 pkg-config = 'pkg-config'
 [properties]
 pkg_config_libdir = '$PREFIX/lib/pkgconfig'
