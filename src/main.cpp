@@ -415,6 +415,15 @@ int main(int argc, char** argv) {
             if (d.deviceId != deviceId) continue;
             std::string reason;
             if (!airplay->canCast(st.path, tracks, reason)) {
+                if (castStatus.active() || castStatus.phase == CastStatus::Phase::Ended) {
+                    // another video was picked while casting and the TV can't play it: end the
+                    // TV session and keep the new video here, paused, instead of leaving the TV
+                    // hanging and the computer playing on its own
+                    airplay->stopCast();
+                    castStatus = CastStatus{};
+                    player.setPause(true);
+                    reason += " It stays on this computer, paused.";
+                }
                 overlay.showToast(reason);
                 castTarget.clear();
                 return;
@@ -442,6 +451,11 @@ int main(int argc, char** argv) {
         }
     };
     auto castActive = [&] { return castStatus.active(); };
+    // Opening another video starts it right away in mpv. While casting it must stay paused
+    // here until it has been sent to the TV (or turned out not to be sendable).
+    auto holdWhileCasting = [&] {
+        if (castStatus.active() || !castTarget.empty()) player.setPause(true);
+    };
 
     // tolga a.mp4 b.mp4 ...: the first plays, the others go into the playlist
     if (argc > 1) player.load(argv[1]);
@@ -607,7 +621,7 @@ int main(int argc, char** argv) {
                 char* path = static_cast<char*>(e.user.data1);
                 if (e.user.code == 1)      player.addSubtitle(path);
                 else if (e.user.code == 2) player.append(path);
-                else                       player.load(path);
+                else                       { player.load(path); holdWhileCasting(); }
                 SDL_free(path);
             } else {
                 overlay.processEvent(e);
@@ -708,7 +722,7 @@ int main(int argc, char** argv) {
                     case SDLK_S: if (!cmd) overlay.togglePanel(Overlay::PanelTab::Subtitles); break;
                     case SDLK_A: if (!cmd) overlay.togglePanel(Overlay::PanelTab::Audio); break;
                     case SDLK_P: if (!cmd) overlay.togglePlaylist(); break;
-                    case SDLK_N: if (!cmd) player.playNext(); break;
+                    case SDLK_N: if (!cmd) { player.playNext(); holdWhileCasting(); } break;
                     default: break;
                     }
                     break;
@@ -746,6 +760,7 @@ int main(int argc, char** argv) {
             } else if (castStatus.phase == P::Ended) {
                 const std::string name = castStatus.deviceName;
                 if (player.playNext()) {
+                    player.setPause(true);  // the file-loaded handler sends it to the TV
                     // next video of the playlist: keep casting (the file-loaded handler sends it)
                     overlay.showToast("Playing the next video on " + name + ".");
                     watched[player.state().path] = 1.0f;
@@ -845,7 +860,7 @@ int main(int argc, char** argv) {
         if (act.toggleMute)        player.toggleMute();
         if (act.toggleFullscreen)  toggleFullscreen();
         if (act.openFile)          showOpenDialog(window);
-        if (!act.openPath.empty()) player.load(act.openPath.c_str());
+        if (!act.openPath.empty()) { player.load(act.openPath.c_str()); holdWhileCasting(); }
         if (act.clearRecent)       recent.clear();
         if (act.seekRelative != 0) {
             if (castActive()) airplay->seek(castStatus.position + act.seekRelative);
@@ -880,7 +895,7 @@ int main(int argc, char** argv) {
         if (act.pictureProperty)     player.setPicture(act.pictureProperty, act.pictureValue);
         if (act.setSubDelay)         player.setSubDelay(act.subDelay);
         if (act.setEqualizer)        player.setEqualizer(act.eqGains);
-        if (act.playlistPlay >= 0)   player.playIndex(act.playlistPlay);
+        if (act.playlistPlay >= 0)   { player.playIndex(act.playlistPlay); holdWhileCasting(); }
         if (act.playlistRemove >= 0) player.removeIndex(act.playlistRemove);
         if (act.playlistClear)       player.clearPlaylist();
         if (act.playlistAdd)         showOpenDialog(window, true);
