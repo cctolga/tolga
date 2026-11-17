@@ -1,8 +1,9 @@
 #pragma once
-// Small preview images for the seek bar (like IINA): when a local file opens, ffmpeg
-// decodes only its keyframes in the background and keeps one small frame every few
-// seconds. The UI asks for the frame nearest to the time under the mouse.
+// Small preview images for the seek bar (like IINA): when a local file opens, ffmpeg jumps
+// to one point every few seconds in the background and decodes just the keyframe there.
+// The UI asks for the ready frame nearest to the time under the mouse.
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -20,6 +21,9 @@ public:
     // is displayW x displayH). Cancels the previous file's work.
     void start(const std::string& path, double duration, int displayW, int displayH);
     void clear();
+    // Holds the work while something more urgent needs the computer (sending a video to an
+    // Apple TV); it continues where it was once paused again with false.
+    void pause(bool on) { m_paused = on; }
 
     // Copies the preview nearest to `seconds` into `rgba` (width x height, 4 bytes per
     // pixel). Returns its index, or -1 if none is ready yet.
@@ -38,4 +42,5 @@ private:
     uint64_t m_gen = 0;
     std::string m_path;
     std::thread m_thread;
+    std::atomic<bool> m_paused{false};
 };

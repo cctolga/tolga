@@ -550,6 +550,9 @@ int main(int argc, char** argv) {
         }
         onlineStatus = online.status();
         OnlineView onlineView{&onlineStatus, &onlineSettings, OpenSubtitles::queryFromFileName(st.path)};
+        // While a video goes to the Apple TV the previews wait: on a slow computer they
+        // would hold up the packaging, and the seek bar previews aren't needed right then.
+        thumbnails.pause(castStatus.active() || !castTarget.empty());
         // seek-bar previews: start once the file's length and picture size are known
         if (!st.idle && st.duration > 0 && st.videoW > 0) thumbnails.start(st.path, st.duration, st.videoW, st.videoH);
         else if (st.idle) thumbnails.clear();

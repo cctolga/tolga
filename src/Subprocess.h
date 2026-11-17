@@ -15,6 +15,10 @@
 #else
 #include <csignal>
 #include <fcntl.h>
+#include <sys/resource.h>
+#ifdef __linux__
+#include <sys/syscall.h>
+#endif
 #include <spawn.h>
 #include <sys/select.h>
 #include <sys/wait.h>
@@ -172,9 +176,42 @@ public:
 #ifdef _WIN32
         if (m_proc) TerminateProcess(m_proc, 1);
 #else
-        if (m_pid > 0) kill(m_pid, SIGTERM);
+        if (m_pid > 0) {
+            kill(m_pid, SIGTERM);
+            kill(m_pid, SIGCONT);  // a suspended child only gets the SIGTERM once it runs again
+        }
 #endif
         m_terminated = true;
+    }
+
+    // For work nobody waits for (seek bar previews): the child gets the CPU, and where the
+    // system allows it the disk, only when nothing else wants them.
+    void setBackground() {
+#ifdef _WIN32
+        if (m_proc) SetPriorityClass(m_proc, IDLE_PRIORITY_CLASS);
+#else
+        if (m_pid <= 0) return;
+        setpriority(PRIO_PROCESS, m_pid, 15);
+#ifdef __APPLE__
+        setpriority(PRIO_DARWIN_PROCESS, m_pid, PRIO_DARWIN_BG);  // lower CPU and disk priority
+#elif defined(__linux__)
+        syscall(SYS_ioprio_set, 1 /* IOPRIO_WHO_PROCESS */, int(m_pid), 3 << 13 /* IOPRIO_CLASS_IDLE */);
+#endif
+#endif
+    }
+
+    // Stops the child where it is (on = true) and lets it continue (on = false).
+    void suspend(bool on) {
+#ifdef _WIN32
+        using Fn = LONG(NTAPI*)(HANDLE);
+        static const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+        static const Fn suspendFn = ntdll ? reinterpret_cast<Fn>(GetProcAddress(ntdll, "NtSuspendProcess")) : nullptr;
+        static const Fn resumeFn = ntdll ? reinterpret_cast<Fn>(GetProcAddress(ntdll, "NtResumeProcess")) : nullptr;
+        const Fn fn = on ? suspendFn : resumeFn;
+        if (m_proc && fn) fn(m_proc);
+#else
+        if (m_pid > 0) kill(m_pid, on ? SIGSTOP : SIGCONT);
+#endif
     }
 
     // Exit code, or -1 if it was stopped or didn't end normally.
