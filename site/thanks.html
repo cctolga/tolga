@@ -56,7 +56,7 @@ If you can't find it, write to <a href="mailto:cctolga@gmail.com">cctolga@gmail.
 <ul>
   <li>Download Tolga Player for <a href="https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Mac.dmg">Mac</a>, <a href="https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Win.exe">Windows</a> or <a href="https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Linux.AppImage">Linux</a> if you haven't already.</li>
   <li>Open a video, open the AirPlay menu and choose <strong>Enter License...</strong></li>
-  <li>Paste the key from the email and choose <strong>Activate</strong>.</li>
+  <li>Paste your license key and choose <strong>Activate</strong>.</li>
 </ul>
 </main>
 <footer>
@@ -77,11 +77,12 @@ If you can't find it, write to <a href="mailto:cctolga@gmail.com">cctolga@gmail.
       const r = await fetch(LICENSE_API + "/license?txn=" + encodeURIComponent(txn));
       const d = await r.json();
       if (r.ok) {
-        msg.textContent = "Here is your license key for " + d.email + ". Keep it somewhere safe; it works on all your Macs and PCs.";
+        msg.textContent = "Here is your license key for " + d.email + ". Copy it now and keep it somewhere safe; the Paddle receipt does not include it. It works on all your Macs and PCs.";
         code.textContent = d.key; code.hidden = false; copy.hidden = false;
         return;
       }
       if (r.status === 409 && tries > 0) return setTimeout(() => fetchKey(tries - 1), 3000);
+      if (r.status === 410) { msg.textContent = "This order was refunded, so it no longer comes with a license key."; return; }
     } catch (e) {
       if (tries > 0) return setTimeout(() => fetchKey(tries - 1), 3000);
     }
