@@ -1,4 +1,5 @@
 #include "DefaultApp.h"
+#include "I18n.h"
 
 #ifndef __APPLE__  // macOS: DefaultAppMac.mm
 
@@ -54,11 +55,11 @@ bool isDefault() { return opensWithUs(L".mkv") && opensWithUs(L".mp4"); }
 
 std::string makeDefault() {
     if (!installed())
-        return "Install Tolga Player with Tolga-Player-Win.exe first: the zip version can't become the default player.";
+        return T("Install Tolga Player with Tolga-Player-Win.exe first: the zip version can't become the default player.");
     // Windows 11 opens the page of this app; Windows 10 opens the general Default apps page
     ShellExecuteW(nullptr, L"open", L"ms-settings:defaultapps?registeredAppUser=Tolga%20Player", nullptr, nullptr,
                   SW_SHOWNORMAL);
-    return "In the Settings window that opened, choose Tolga Player for .mkv, .mp4 and the other video types.";
+    return T("In the Settings window that opened, choose Tolga Player for .mkv, .mp4 and the other video types.");
 }
 
 #else
@@ -146,7 +147,7 @@ bool isDefault() {
 
 std::string makeDefault() {
     const std::string exe = selfPath();
-    if (exe.empty()) return "Couldn't find where Tolga Player is.";
+    if (exe.empty()) return T("Couldn't find where Tolga Player is.");
     std::error_code ec;
     const fs::path apps = dataHome() / "applications";
     fs::create_directories(apps, ec);
@@ -167,7 +168,7 @@ std::string makeDefault() {
              "Categories=AudioVideo;Video;Player;\n"
              "StartupWMClass=app.tolga.player\n"
              "MimeType=" << mime << "\n";
-        if (!f) return "Couldn't write " + (apps / kDesktopId).string() + ".";
+        if (!f) return TF("Couldn't write {}.", {(apps / kDesktopId).string()});
     }
 
     // the icon, from the AppImage (or next to the program in a normal install)
@@ -182,15 +183,15 @@ std::string makeDefault() {
     }
 
     const std::string xdg = findProgram("xdg-mime");
-    if (xdg.empty()) return "Tolga Player is in your applications menu now; set it as the default in your system settings.";
+    if (xdg.empty()) return T("Tolga Player is in your applications menu now; set it as the default in your system settings.");
     std::vector<std::string> args{xdg, "default", kDesktopId};
     for (const char* t : kVideoTypes) args.emplace_back(t);
     int rc = -1;
     run(args, &rc);
     if (const std::string udd = findProgram("update-desktop-database"); !udd.empty()) run({udd, apps.string()});
     if (rc != 0 || !isDefault())
-        return "Tolga Player is in your applications menu now; your desktop didn't accept it as the default player.";
-    return "Done: double-clicking a video now opens Tolga Player. It is in your applications menu too.";
+        return T("Tolga Player is in your applications menu now; your desktop didn't accept it as the default player.");
+    return T("Done: double-clicking a video now opens Tolga Player. It is in your applications menu too.");
 }
 #endif
 

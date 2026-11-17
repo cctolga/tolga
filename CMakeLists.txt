@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Tolga VERSION 0.1.5 LANGUAGES C CXX)
+project(Tolga VERSION 0.1.6 LANGUAGES C CXX)
 if(APPLE)
   enable_language(OBJCXX)   # must come right after project(), before any target (Ninja needs it)
 endif()
@@ -175,8 +175,21 @@ add_executable(tolga
   src/MpvPlayer.cpp
   src/Overlay.cpp
   src/Ffmpeg.cpp
-  src/DefaultApp.cpp)
+  src/DefaultApp.cpp
+  src/I18n.cpp)
 target_include_directories(tolga PRIVATE ${TOLGA_API_INCLUDE})
+
+# Translations: resources/lang/<code>.json are built into the program (src/I18n.cpp)
+file(GLOB _lang_files CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/lang/*.json)
+set(_lang_inc "")
+foreach(_f ${_lang_files})
+  get_filename_component(_code ${_f} NAME_WE)
+  file(READ ${_f} _json)
+  string(APPEND _lang_inc "    {\"${_code}\", R\"TOLGALANG(${_json})TOLGALANG\"},\n")
+endforeach()
+file(WRITE ${CMAKE_BINARY_DIR}/lang/Languages.inc.new "${_lang_inc}")
+configure_file(${CMAKE_BINARY_DIR}/lang/Languages.inc.new ${CMAKE_BINARY_DIR}/lang/Languages.inc COPYONLY)
+target_include_directories(tolga PRIVATE ${CMAKE_BINARY_DIR}/lang)
 target_link_libraries(tolga PRIVATE imgui PkgConfig::MPV ${_airplay_lib} CURL::libcurl nlohmann_json::nlohmann_json
                       Threads::Threads)
 target_compile_definitions(tolga PRIVATE TOLGA_WEBSITE="${TOLGA_WEBSITE}" TOLGA_VERSION="${PROJECT_VERSION}"

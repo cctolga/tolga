@@ -9,6 +9,7 @@
 #include "RecentFiles.h"
 #include "MacWindow.h"
 #include "DefaultApp.h"
+#include "I18n.h"
 #include "Overlay.h"
 #include "Paths.h"
 
@@ -80,7 +81,7 @@ public:
     std::vector<AirPlayTarget> devices() const override { return {}; }
     bool searching() const override { return false; }
     bool canCast(const std::string&, const std::vector<CastTrack>&, std::string& reason) const override {
-        reason = "AirPlay is part of the official Tolga Player app.";
+        reason = T("AirPlay is part of the official Tolga Player app.");
         return false;
     }
     void startCast(const std::string&, const std::string&, double, double, const std::vector<CastTrack>&,
@@ -95,7 +96,7 @@ public:
     LicenseInfo license() const override { return {}; }
     bool castingAllowed() const override { return false; }
     bool activate(const std::string&, std::string& error) override {
-        error = "This build has no AirPlay.";
+        error = T("This build has no AirPlay.");
         return false;
     }
     void shutdown() override {}
@@ -186,16 +187,16 @@ bool isSubtitleFile(const std::string& path) {
 
 void showSubtitleDialog(SDL_Window* window) {
     static const SDL_DialogFileFilter filters[] = {
-        {"Subtitles", "srt;ass;ssa;vtt;sub;sup"},
-        {"All files", "*"},
+        {T("Subtitles"), "srt;ass;ssa;vtt;sub;sup"},
+        {T("All files"), "*"},
     };
     SDL_ShowOpenFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(1)), window, filters, 2, nullptr, false);
 }
 
 void showOpenDialog(SDL_Window* window, bool add = false) {
     static const SDL_DialogFileFilter filters[] = {
-        {"Video", "mkv;mp4;m4v;mov;avi;webm;wmv;flv;ts;m2ts;mpg;mpeg;ogv;3gp"},
-        {"All files", "*"},
+        {T("Video"), "mkv;mp4;m4v;mov;avi;webm;wmv;flv;ts;m2ts;mpg;mpeg;ogv;3gp"},
+        {T("All files"), "*"},
     };
     SDL_ShowOpenFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(add ? 2 : 0)), window, filters, 2,
                            nullptr, true);
@@ -270,6 +271,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
+    i18n::init();  // the language of the user interface, from the system
     trace("SDL_Init done");
     g_wakeEvent = SDL_RegisterEvents(3);
     g_openEvent = g_wakeEvent + 1;
@@ -321,7 +323,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "Could not create an OpenGL context (Tolga Player needs OpenGL 2.1 or newer):%s\n",
                      glError.c_str());
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player",
-            "Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it.",
+            T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it."),
             nullptr);
         return 1;
     }
@@ -374,7 +376,8 @@ int main(int argc, char** argv) {
     OpenSubtitles online(configDir, pushWake);
     RecentFiles recent(configDir);
     // "Make Tolga Player your default video player" on the idle screen, until it is
-    bool offerDefault = defaultapp::available() && !defaultapp::isDefault();
+    const bool defaultAvailable = defaultapp::available();
+    bool offerDefault = defaultAvailable && !defaultapp::isDefault();
     std::string defaultNote;
     trace("OpenSubtitles ready");
 
@@ -448,7 +451,7 @@ int main(int argc, char** argv) {
                     airplay->stopCast();
                     castStatus = CastStatus{};
                     player.setPause(true);
-                    reason += " It stays on this computer, paused.";
+                    reason += std::string(" ") + T("It stays on this computer, paused.");
                 }
                 overlay.showToast(reason);
                 castTarget.clear();
@@ -567,11 +570,12 @@ int main(int argc, char** argv) {
 #endif
         const Uint64 tfBeforeDraw = SDL_GetTicksNS();
         overlay.setRecentFiles(st.idle ? &recent.existing() : nullptr);
-        overlay.setDefaultPlayer(offerDefault, defaultNote);
+        overlay.setDefaultPlayer(defaultAvailable, offerDefault, defaultNote);
         OverlayActions act = overlay.draw(st, fullscreen, apView, onlineView, playlistView);
         tfDraw = SDL_GetTicksNS() - tfBeforeDraw;
         // the title bar buttons fade together with the controls
         macSetTitlebarAlpha(window, overlay.controlsAlpha());
+        macSetAppearance(window, overlay.lightTheme());
         const Uint64 tfBeforeImgui = SDL_GetTicksNS();
         overlay.render();
         tfImgui = SDL_GetTicksNS() - tfBeforeImgui;
@@ -668,10 +672,10 @@ int main(int argc, char** argv) {
                 case SDL_EVENT_WINDOW_FOCUS_GAINED:
                     // The default may have changed meanwhile: in Windows' settings after the
                     // button, or in Finder / the system settings for another player.
-                    if (player.state().idle && defaultapp::available()) {
+                    if (defaultAvailable) {
                         const bool isDef = defaultapp::isDefault();
                         if (isDef && offerDefault && !defaultNote.empty())
-                            defaultNote = "Done: double-clicking a video now opens Tolga Player.";
+                            defaultNote = T("Done: double-clicking a video now opens Tolga Player.");
                         else if (!isDef && !offerDefault)
                             defaultNote.clear();  // another player took over: offer it again
                         offerDefault = !isDef;
@@ -801,10 +805,10 @@ int main(int argc, char** argv) {
                 if (player.playNext()) {
                     player.setPause(true);  // the file-loaded handler sends it to the TV
                     // next video of the playlist: keep casting (the file-loaded handler sends it)
-                    overlay.showToast("Playing the next video on " + name + ".");
+                    overlay.showToast(TF("Playing the next video on {}.", {name}));
                     watched[player.state().path] = 1.0f;
                 } else {
-                    overlay.showToast("Finished playing on " + name + ".");
+                    overlay.showToast(TF("Finished playing on {}.", {name}));
                     airplay->stopCast();
                     castTarget.clear();
                     castStatus = CastStatus{};
@@ -837,7 +841,7 @@ int main(int argc, char** argv) {
                     const double pos = castStatus.position;
                     const std::string target = castTarget;
                     player.seekAbsolute(pos, true);
-                    overlay.showToast("Updating subtitle timing on " + castStatus.deviceName + "...");
+                    overlay.showToast(TF("Updating subtitle timing on {}...", {castStatus.deviceName}));
                     startCast(target, pos);
                 }
                 redrawFrames = std::max(redrawFrames, 1);
@@ -883,7 +887,7 @@ int main(int argc, char** argv) {
         if (act.activateLicense) {
             if (airplay->activate(act.licenseKey, licenseError)) {
                 overlay.closeLicenseDialog();
-                overlay.showToast("Thank you! Tolga is licensed to " + airplay->license().email + ".");
+                overlay.showToast(TF("Thank you! Tolga is licensed to {}.", {airplay->license().email}));
             }
         }
 

@@ -1,4 +1,5 @@
 #include "DefaultApp.h"
+#include "I18n.h"
 
 #import <Cocoa/Cocoa.h>
 #import <CoreServices/CoreServices.h>
@@ -48,7 +49,7 @@ bool isDefault() {
 
 std::string makeDefault() {
     @autoreleasepool {
-        if (!available()) return "Only the installed app can be the default player.";
+        if (!available()) return T("Only the installed app can be the default player.");
         // make sure Launch Services knows this copy (and its document types) first
         LSRegisterURL((__bridge CFURLRef)[[NSBundle mainBundle] bundleURL], true);
         int failed = 0;
@@ -56,9 +57,9 @@ std::string makeDefault() {
             if (LSSetDefaultRoleHandlerForContentType((__bridge CFStringRef)uti, kLSRolesAll,
                                                       (__bridge CFStringRef)bundleId()) != noErr)
                 ++failed;
-        if (isDefault()) return "Done: double-clicking a video now opens Tolga Player.";
-        if (failed) return "macOS didn't allow it. In Finder: Get Info on a video > Open with > Tolga Player > Change All.";
-        return "Done. If a video still opens elsewhere, use Get Info > Open with > Change All in Finder.";
+        if (isDefault()) return T("Done: double-clicking a video now opens Tolga Player.");
+        if (failed) return T("macOS didn't allow it. In Finder: Get Info on a video > Open with > Tolga Player > Change All.");
+        return T("Done. If a video still opens elsewhere, use Get Info > Open with > Change All in Finder.");
     }
 }
 

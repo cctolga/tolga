@@ -1,4 +1,6 @@
 #include "Overlay.h"
+#include "I18n.h"
+#include "Paths.h"
 #include "tolga/AirPlayApi.h"
 #include "MpvPlayer.h"
 #include "OpenSubtitles.h"
@@ -17,8 +19,10 @@
 #include <functional>
 #include <iterator>
 #include <cstdio>
+#include <fstream>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -27,9 +31,30 @@ constexpr float    kFadeSeconds = 0.22f;
 constexpr float    kPanelH = 92.0f;
 constexpr float    kPanelBottom = 22.0f;
 
+// The light appearance turns the greys around: white text and lines become near-black,
+// the dark panels become light. Colours with a hue (turquoise, red) stay as they are.
+// TV/TC stand for ImVec4/IM_COL32 throughout this file so every colour follows the theme.
+bool g_light = false;
+
+ImVec4 TV(float r, float g, float b, float a) {
+    if (!g_light) return ImVec4(r, g, b, a);
+    if (std::max({r, g, b}) - std::min({r, g, b}) > 0.07f) {
+        // bright accents (turquoise text, the coral error) get darker to read on light grey
+        const float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+        return lum > 0.55f ? ImVec4(r * 0.78f, g * 0.78f, b * 0.78f, a) : ImVec4(r, g, b, a);
+    }
+    const float v = (r + g + b) / 3.0f;
+    const float l = v >= 0.5f ? 1.0f - v * 0.906f : 1.0f - v * 0.35f;  // white -> ink, black -> paper
+    return ImVec4(l, l, l, a);
+}
+
+ImU32 TC(int r, int g, int b, int a) {
+    return ImGui::ColorConvertFloat4ToU32(TV(r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f));
+}
+
 // Colours are always multiplied by the overlay alpha so everything fades together.
 ImU32 col(float r, float g, float b, float a, float alpha) {
-    return ImGui::GetColorU32(ImVec4(r, g, b, a * alpha));
+    return ImGui::GetColorU32(TV(r, g, b, a * alpha));
 }
 
 std::string formatTime(double t) {
@@ -129,7 +154,7 @@ void roundedTriangle(ImDrawList* dl, ImVec2 a, ImVec2 b, ImVec2 c, float r, ImU3
 
 // AirPlay video glyph: a rounded screen, open at the bottom, with a solid triangle rising into it.
 void iconAirPlay(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
-    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.18f, 0.80f, 0.76f, 1.0f)) : color;
+    const ImU32 col = active ? ImGui::GetColorU32(TV(0.18f, 0.80f, 0.76f, 1.0f)) : color;
     const float w = s * 0.58f, top = c.y - s * 0.46f, bot = c.y + s * 0.20f;
     const float r = s * 0.11f, t = 1.7f, gap = s * 0.30f;
     dl->PathLineTo({c.x - gap, bot});
@@ -145,7 +170,7 @@ void iconAirPlay(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
 }
 
 void iconGear(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
-    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.18f, 0.80f, 0.76f, 1.0f)) : color;
+    const ImU32 col = active ? ImGui::GetColorU32(TV(0.18f, 0.80f, 0.76f, 1.0f)) : color;
     const float r = s * 0.36f, tooth = s * 0.13f;
     for (int i = 0; i < 8; ++i) {  // eight teeth
         const float ang = i * 3.14159265f / 4.0f;
@@ -157,7 +182,7 @@ void iconGear(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
 }
 
 void iconPlaylist(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
-    const ImU32 col = active ? ImGui::GetColorU32(ImVec4(0.18f, 0.80f, 0.76f, 1.0f)) : color;
+    const ImU32 col = active ? ImGui::GetColorU32(TV(0.18f, 0.80f, 0.76f, 1.0f)) : color;
     const float w = s * 0.5f;
     for (int i = 0; i < 3; ++i) {
         const float y = c.y - s * 0.28f + i * s * 0.28f;
@@ -216,9 +241,83 @@ const char* findSystemFont() {
     return nullptr;
 }
 
+// Fonts for the characters the main font lacks (Japanese, Chinese, Korean): in the menus of
+// those languages and in file and track names. Glyphs are loaded only when a text needs them.
+// Han characters look different in Chinese and Japanese, so the user's language goes first.
+std::vector<const char*> findFallbackFonts() {
+    const char* const japanese[] = {
+        "/System/Library/Fonts/\xE3\x83\x92\xE3\x83\xA9\xE3\x82\xAE\xE3\x83\x8E\xE8\xA7\x92\xE3\x82\xB4\xE3\x82\xB7\xE3\x83\x83\xE3\x82\xAF W3.ttc",  // Hiragino Kaku Gothic
+        "C:\\Windows\\Fonts\\YuGothM.ttc", "C:\\Windows\\Fonts\\meiryo.ttc"};
+    const char* const chinese[] = {
+        "/System/Library/Fonts/Hiragino Sans GB.ttc", "C:\\Windows\\Fonts\\msyh.ttc"};
+    const char* const korean[] = {
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc", "C:\\Windows\\Fonts\\malgun.ttf"};
+    const char* const noto[] = {  // Noto Sans CJK has all three
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc"};
+    std::vector<const char*> order;
+    auto add = [&](const auto& list) { for (const char* p : list) order.push_back(p); };
+    const std::string& lang = i18n::language();
+    if (lang == "zh")      { add(chinese); add(japanese); add(korean); }
+    else if (lang == "ko") { add(korean); add(japanese); add(chinese); }
+    else                   { add(japanese); add(chinese); add(korean); }
+    add(noto);
+    std::vector<const char*> found;
+    for (const char* p : order)
+        if (FILE* f = std::fopen(p, "rb")) { std::fclose(f); found.push_back(p); }
+    return found;
+}
+
 }  // namespace
 
 // ================================================================== setup
+
+namespace {
+
+// ImGui's own colours (text, popups, separators...) for the current appearance.
+void applyThemeColors() {
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.Colors[ImGuiCol_Text] = TV(1, 1, 1, 0.95f);
+    style.Colors[ImGuiCol_PopupBg] = TV(0.09f, 0.09f, 0.11f, 0.94f);
+    style.Colors[ImGuiCol_Border] = TV(1, 1, 1, 0.08f);
+    style.Colors[ImGuiCol_Header] = TV(1, 1, 1, 0.08f);
+    style.Colors[ImGuiCol_HeaderHovered] = TV(1, 1, 1, 0.12f);
+    style.Colors[ImGuiCol_HeaderActive] = TV(1, 1, 1, 0.18f);
+    style.Colors[ImGuiCol_Separator] = TV(1, 1, 1, 0.10f);
+    style.Colors[ImGuiCol_TextDisabled] = TV(1, 1, 1, 0.45f);
+    style.Colors[ImGuiCol_CheckMark] = TV(1, 1, 1, 0.95f);
+    // Tolga Player's turquoise instead of ImGui's default blue
+    style.Colors[ImGuiCol_SliderGrab] = TV(0.18f, 0.80f, 0.76f, 1.0f);
+    style.Colors[ImGuiCol_SliderGrabActive] = TV(0.30f, 0.88f, 0.84f, 1.0f);
+    style.Colors[ImGuiCol_TextSelectedBg] = TV(0.18f, 0.80f, 0.76f, 0.35f);
+    style.Colors[ImGuiCol_NavHighlight] = TV(0.18f, 0.80f, 0.76f, 1.0f);
+}
+
+std::string themeFile() {
+    std::string path;
+    if (char* pref = SDL_GetPrefPath("", "Tolga")) {
+        path = std::string(pref) + "theme.txt";
+        SDL_free(pref);
+    }
+    return path;
+}
+
+}  // namespace
+
+void Overlay::loadTheme() {
+    std::ifstream in(utf8Path(themeFile()));
+    std::string word;
+    if (in >> word) m_theme = word == "dark" ? Theme::Dark : word == "light" ? Theme::Light : Theme::System;
+}
+
+void Overlay::setTheme(Theme theme) {
+    m_theme = theme;
+    std::ofstream out(utf8Path(themeFile()), std::ios::trunc);
+    out << (theme == Theme::System ? "system" : theme == Theme::Light ? "light" : "dark") << '\n';
+    poke();
+}
+
+bool Overlay::lightTheme() const { return g_light; }
 
 bool Overlay::init(SDL_Window* window, SDL_GLContext gl, const char* glslVersion) {
     m_window = window;
@@ -231,25 +330,18 @@ bool Overlay::init(SDL_Window* window, SDL_GLContext gl, const char* glslVersion
         io.Fonts->AddFontFromFileTTF(font, 15.0f);
     else
         io.Fonts->AddFontDefault();
+    for (const char* fallback : findFallbackFonts()) {
+        ImFontConfig merge;
+        merge.MergeMode = true;
+        io.Fonts->AddFontFromFileTTF(fallback, 15.0f, &merge);
+    }
 
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowBorderSize = 0.0f;
     style.WindowPadding = {0, 0};
     style.WindowRounding = 16.0f;
-    style.Colors[ImGuiCol_Text] = ImVec4(1, 1, 1, 0.95f);
-    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.09f, 0.09f, 0.11f, 0.94f);
-    style.Colors[ImGuiCol_Border] = ImVec4(1, 1, 1, 0.08f);
-    style.Colors[ImGuiCol_Header] = ImVec4(1, 1, 1, 0.08f);
-    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(1, 1, 1, 0.12f);
-    style.Colors[ImGuiCol_HeaderActive] = ImVec4(1, 1, 1, 0.18f);
-    style.Colors[ImGuiCol_Separator] = ImVec4(1, 1, 1, 0.10f);
-    style.Colors[ImGuiCol_TextDisabled] = ImVec4(1, 1, 1, 0.45f);
-    style.Colors[ImGuiCol_CheckMark] = ImVec4(1, 1, 1, 0.95f);
-    // Tolga Player's turquoise instead of ImGui's default blue
-    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.18f, 0.80f, 0.76f, 1.0f);
-    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.30f, 0.88f, 0.84f, 1.0f);
-    style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.18f, 0.80f, 0.76f, 0.35f);
-    style.Colors[ImGuiCol_NavHighlight] = ImVec4(0.18f, 0.80f, 0.76f, 1.0f);
+    loadTheme();
+    applyThemeColors();
     style.PopupRounding = 12.0f;
     style.PopupBorderSize = 1.0f;
     style.ItemSpacing = {8, 4};
@@ -316,6 +408,13 @@ OverlayActions Overlay::draw(const PlayerState& st, bool fullscreen, const AirPl
         const float k = m_fbScale * m_uiScale;
         io.DisplaySize = {m_fbW / k, m_fbH / k};
         io.DisplayFramebufferScale = {k, k};
+    }
+    // the appearance: chosen in Settings > General, or the system's
+    const bool light = m_theme == Theme::Light ||
+                       (m_theme == Theme::System && SDL_GetSystemTheme() == SDL_SYSTEM_THEME_LIGHT);
+    if (light != g_light) {
+        g_light = light;
+        applyThemeColors();
     }
     ImGui::NewFrame();
 
@@ -398,11 +497,11 @@ void Overlay::drawCastScreen(const PlayerState& st, const CastStatus& cast) {
     const ImVec2 size = ImGui::GetIO().DisplaySize;
     ImDrawList* bg = ImGui::GetBackgroundDrawList();
     bg->AddRectFilledMultiColor({0, 0}, size,
-        IM_COL32(24, 26, 34, 255), IM_COL32(24, 26, 34, 255),
-        IM_COL32(10, 10, 13, 255), IM_COL32(10, 10, 13, 255));
+        TC(24, 26, 34, 255), TC(24, 26, 34, 255),
+        TC(10, 10, 13, 255), TC(10, 10, 13, 255));
 
     const ImVec2 c{size.x * 0.5f, size.y * 0.5f - 46.0f};
-    iconAirPlay(bg, c, 76, IM_COL32(255, 255, 255, 215), true);
+    iconAirPlay(bg, c, 76, TC(255, 255, 255, 215), true);
 
     using P = CastStatus::Phase;
     const int dots = int(ImGui::GetTime() * 3.0) % 4;
@@ -411,16 +510,16 @@ void Overlay::drawCastScreen(const PlayerState& st, const CastStatus& cast) {
     case P::Preparing: {
         char pct[16];
         std::snprintf(pct, sizeof pct, " %d%%", int(cast.progress * 100.0));
-        line = "Preparing for " + cast.deviceName + "..." + pct;
+        line = TF("Preparing for {}...", {cast.deviceName}) + pct;
         break;
     }
-    case P::Connecting: line = "Connecting to " + cast.deviceName + std::string(dots, '.'); break;
+    case P::Connecting: line = TF("Connecting to {}", {cast.deviceName}) + std::string(dots, '.'); break;
     case P::NeedPin:
-    case P::Pairing:    line = "Pairing with " + cast.deviceName; break;
-    case P::Loading:    line = "Loading on " + cast.deviceName + std::string(dots, '.'); break;
-    case P::Paused:     line = "Paused on " + cast.deviceName; break;
-    case P::Ended:      line = "Finished on " + cast.deviceName; break;
-    default:            line = "Playing on " + cast.deviceName; break;
+    case P::Pairing:    line = TF("Pairing with {}", {cast.deviceName}); break;
+    case P::Loading:    line = TF("Loading on {}", {cast.deviceName}) + std::string(dots, '.'); break;
+    case P::Paused:     line = TF("Paused on {}", {cast.deviceName}); break;
+    case P::Ended:      line = TF("Finished on {}", {cast.deviceName}); break;
+    default:            line = TF("Playing on {}", {cast.deviceName}); break;
     }
     ImFont* font = ImGui::GetFont();
     // keep the text centred while the dots animate
@@ -428,12 +527,12 @@ void Overlay::drawCastScreen(const PlayerState& st, const CastStatus& cast) {
     const std::string widest = animated ? line.substr(0, line.size() - dots) + "..." : line;
     const float ls = 22.0f;
     const float lw = font->CalcTextSizeA(ls, FLT_MAX, 0, widest.c_str()).x;
-    bg->AddText(font, ls, {c.x - lw * 0.5f, c.y + 52}, IM_COL32(255, 255, 255, 235), line.c_str());
+    bg->AddText(font, ls, {c.x - lw * 0.5f, c.y + 52}, TC(255, 255, 255, 235), line.c_str());
 
     if (!st.title.empty()) {
         const float ts = 15.0f;
         ImVec2 tw = font->CalcTextSizeA(ts, FLT_MAX, 0, st.title.c_str());
-        bg->AddText(font, ts, {c.x - tw.x * 0.5f, c.y + 84}, IM_COL32(255, 255, 255, 120), st.title.c_str());
+        bg->AddText(font, ts, {c.x - tw.x * 0.5f, c.y + 84}, TC(255, 255, 255, 120), st.title.c_str());
     }
 }
 
@@ -448,7 +547,7 @@ void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {
     // dim everything behind the dialog (and block clicks on the panel)
     ImGui::SetNextWindowPos({0, 0});
     ImGui::SetNextWindowSize(size);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.45f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0, 0, 0, 0.45f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::Begin("##pin_dim", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -460,8 +559,8 @@ void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {
     ImGui::SetNextWindowPos({(size.x - dlg.x) * 0.5f, (size.y - dlg.y) * 0.5f});
     ImGui::SetNextWindowSize(dlg);
     ImGui::SetNextWindowFocus();
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.10f, 0.10f, 0.12f, 0.97f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1, 1, 1, 0.10f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0.10f, 0.10f, 0.12f, 0.97f));
+    ImGui::PushStyleColor(ImGuiCol_Border, TV(1, 1, 1, 0.10f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
     ImGui::Begin("##pin", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
@@ -469,13 +568,13 @@ void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {
     m_hoveringPanel = true;
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const std::string title = "Pair with " + cast.deviceName;
-    dl->AddText(ImGui::GetFont(), 19.0f, ImGui::GetCursorScreenPos(), IM_COL32(255, 255, 255, 245), title.c_str());
+    const std::string title = TF("Pair with {}", {cast.deviceName});
+    dl->AddText(ImGui::GetFont(), 19.0f, ImGui::GetCursorScreenPos(), TC(255, 255, 255, 245), title.c_str());
     ImGui::Dummy({0, 28});
     if (cast.pinRejected)
-        ImGui::TextColored({1.0f, 0.55f, 0.5f, 1.0f}, "That code didn't work. Enter the new one.");
+        ImGui::TextColored({1.0f, 0.55f, 0.5f, 1.0f}, "%s", T("That code didn't work. Enter the new one."));
     else
-        ImGui::TextDisabled("Enter the code shown on your TV.");
+        ImGui::TextDisabled("%s", T("Enter the code shown on your TV."));
     ImGui::Dummy({0, 6});
 
     // big centred digits field
@@ -484,7 +583,7 @@ void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {
     ImGui::PushItemWidth(fieldW);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {12, 8});
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1, 1, 1, 0.07f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, TV(1, 1, 1, 0.07f));
     if (firstFrame) ImGui::SetKeyboardFocusHere();
     ImGui::BeginDisabled(checking);
     const bool enter = ImGui::InputText("##pinfield", m_pinBuf, 5,
@@ -498,23 +597,24 @@ void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {
     const ImVec2 bsz{100, 30};
     ImGui::SetCursorPosX(dlg.x - 22 - bsz.x * 2 - 10);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 15.0f);
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1, 1, 1, 0.08f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.14f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.20f));
-    if (ImGui::Button("Cancel", bsz) || ImGui::IsKeyPressed(ImGuiKey_Escape)) out.cancelPin = true;
+    ImGui::PushStyleColor(ImGuiCol_Button, TV(1, 1, 1, 0.08f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, TV(1, 1, 1, 0.14f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, TV(1, 1, 1, 0.20f));
+    if (ImGui::Button(T("Cancel"), bsz) || ImGui::IsKeyPressed(ImGuiKey_Escape)) out.cancelPin = true;
     ImGui::PopStyleColor(3);
     ImGui::SameLine(0, 10);
     const bool ready = std::strlen(m_pinBuf) == 4 && !checking;
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.62f, 0.60f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.11f, 0.70f, 0.67f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.52f, 0.51f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, TV(0.07f, 0.62f, 0.60f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, TV(0.11f, 0.70f, 0.67f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, TV(0.05f, 0.52f, 0.51f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));  // white on turquoise in both themes
     ImGui::BeginDisabled(!ready);
-    if ((ImGui::Button(checking ? "Checking..." : "Pair", bsz) || enter) && ready) {
+    if ((ImGui::Button(checking ? T("Checking...") : T("Pair"), bsz) || enter) && ready) {
         out.submitPin = true;
         out.pin = m_pinBuf;
     }
     ImGui::EndDisabled();
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4);
     ImGui::PopStyleVar();
 
     ImGui::End();
@@ -609,7 +709,7 @@ void Overlay::drawAbout(const AirPlayView& airplay, OverlayActions& out) {
     // dim the video; a click outside closes
     ImGui::SetNextWindowPos({0, 0});
     ImGui::SetNextWindowSize(size);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.45f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0, 0, 0, 0.45f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::Begin("##about_dim", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -625,8 +725,8 @@ void Overlay::drawAbout(const AirPlayView& airplay, OverlayActions& out) {
     ImGui::SetNextWindowPos({(size.x - dlg.x) * 0.5f, (size.y - dlg.y) * 0.5f});
     ImGui::SetNextWindowSize(dlg);
     ImGui::SetNextWindowFocus();
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.10f, 0.10f, 0.12f, 0.97f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1, 1, 1, 0.10f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0.10f, 0.10f, 0.12f, 0.97f));
+    ImGui::PushStyleColor(ImGuiCol_Border, TV(1, 1, 1, 0.10f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
@@ -647,55 +747,57 @@ void Overlay::drawAbout(const AirPlayView& airplay, OverlayActions& out) {
     const float y0 = small ? 18.0f : 30.0f;
     drawAppIcon(dl, {wp.x + (leftW - iconS) * 0.5f, wp.y + y0}, iconS);
     float ty = y0 + iconS + (small ? 8.0f : 14.0f);
-    centered("Tolga Player", ty, small ? 21.0f : 26.0f, IM_COL32(255, 255, 255, 245));
+    centered("Tolga Player", ty, small ? 21.0f : 26.0f, TC(255, 255, 255, 245));
     ty += small ? 28.0f : 36.0f;
-    centered(m_about.version.empty() ? std::string() : "Version " + m_about.version, ty, 15.0f, IM_COL32(255, 255, 255, 190));
+    centered(m_about.version.empty() ? std::string() : TF("Version {}", {m_about.version}), ty, 15.0f, TC(255, 255, 255, 190));
     ty += 22.0f;
     std::string libs = m_about.mpvVersion;
     if (!m_about.ffmpegVersion.empty()) libs += (libs.empty() ? "" : "   ") + std::string("FFmpeg ") + m_about.ffmpegVersion;
-    centered(libs, ty, 12.5f, IM_COL32(255, 255, 255, 120));
+    centered(libs, ty, 12.5f, TC(255, 255, 255, 120));
     ty += 22.0f;
-    centered("\xC2\xA9 2026 Tolga \xC3\x87iftci\xC3\xA7" "elik", ty, 12.5f, IM_COL32(255, 255, 255, 120));  // © 2026 Tolga Çiftciçelik
+    centered("\xC2\xA9 2026 Tolga \xC3\x87iftci\xC3\xA7" "elik", ty, 12.5f, TC(255, 255, 255, 120));  // © 2026 Tolga Çiftciçelik
     ty += 22.0f;
     if (const LicenseInfo* lic = airplay.license) {
         std::string line;
         using S = LicenseInfo::State;
-        if (lic->state == S::Licensed) line = "Licensed to " + lic->email;
-        else if (lic->state == S::Trial) line = "AirPlay trial: " + std::to_string(lic->trialDaysLeft) + " days left";
-        else if (lic->state == S::Expired) line = "AirPlay trial ended";
-        if (!line.empty()) centered(line, ty, 12.5f, IM_COL32(47, 211, 198, 230));
+        if (lic->state == S::Licensed) line = TF("Licensed to {}", {lic->email});
+        else if (lic->state == S::Trial) line = lic->trialDaysLeft == 1 ? std::string(T("AirPlay trial: 1 day left"))
+                                                                     : TF("AirPlay trial: {} days left", {std::to_string(lic->trialDaysLeft)});
+        else if (lic->state == S::Expired) line = T("AirPlay trial ended");
+        if (!line.empty()) centered(line, ty, 12.5f, TC(47, 211, 198, 230));
     }
     ty += 30.0f;
 
     const ImVec2 bsz{leftW - 70.0f, small ? 26.0f : 30.0f};
-    const char* labels[] = {"License", "Credits", "Website"};
+    const char* labels[] = {T("License"), T("Credits"), T("Website")};
     const float by = std::max(ty, dlg.y - 3 * (bsz.y + 8) - 18);
     for (int i = 0; i < 3; ++i) {
         ImGui::SetCursorPos({35.0f, by + i * (bsz.y + 8)});
         const bool active = i == m_aboutTab;
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.07f, 0.62f, 0.60f, 1.0f) : ImVec4(1, 1, 1, 0.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.11f, 0.70f, 0.67f, 1.0f) : ImVec4(1, 1, 1, 0.08f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.52f, 0.51f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, active ? TV(0.07f, 0.62f, 0.60f, 1.0f) : TV(1, 1, 1, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? TV(0.11f, 0.70f, 0.67f, 1.0f) : TV(1, 1, 1, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, TV(0.05f, 0.52f, 0.51f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, active ? ImVec4(1, 1, 1, 1) : ImGui::GetStyleColorVec4(ImGuiCol_Text));  // white on turquoise in both themes
         if (ImGui::Button(labels[i], bsz)) {
             if (i == 2) out.openWebsite = true;
             else m_aboutTab = i;
         }
-        ImGui::PopStyleColor(3);
+        ImGui::PopStyleColor(4);
         ImGui::PopStyleVar();
     }
 
     // ---- right: the text, scrolling
-    dl->AddLine({wp.x + leftW, wp.y + 16}, {wp.x + leftW, wp.y + dlg.y - 16}, IM_COL32(255, 255, 255, 20));
+    dl->AddLine({wp.x + leftW, wp.y + 16}, {wp.x + leftW, wp.y + dlg.y - 16}, TC(255, 255, 255, 20));
     ImGui::SetCursorPos({leftW + 20.0f, 20.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 8.0f);
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, TV(0, 0, 0, 0));
     ImGui::BeginChild(m_aboutTab == 0 ? "##about_license" : "##about_credits", {dlg.x - leftW - 36.0f, dlg.y - 40.0f});
     const std::string& text = m_aboutTab == 0 ? m_licenseReflowed : m_creditsReflowed;
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.78f));
+    ImGui::PushStyleColor(ImGuiCol_Text, TV(1, 1, 1, 0.78f));
     ImGui::PushTextWrapPos(0.0f);
-    if (text.empty()) ImGui::TextUnformatted(m_aboutTab == 0 ? "Tolga Player is licensed under the Apache License 2.0."
-                                                             : "The licenses of the libraries Tolga Player uses are in the app bundle.");
+    if (text.empty()) ImGui::TextUnformatted(m_aboutTab == 0 ? T("Tolga Player is licensed under the Apache License 2.0.")
+                                                             : T("The licenses of the libraries Tolga Player uses are in the app bundle."));
     else ImGui::TextUnformatted(text.c_str(), text.c_str() + text.size());
     ImGui::PopTextWrapPos();
     ImGui::PopStyleColor();
@@ -720,7 +822,7 @@ void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out)
     const ImVec2 size = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos({0, 0});
     ImGui::SetNextWindowSize(size);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.45f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0, 0, 0, 0.45f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::Begin("##license_dim", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -733,8 +835,8 @@ void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out)
     ImGui::SetNextWindowPos({(size.x - dlg.x) * 0.5f, (size.y - dlg.y) * 0.5f});
     ImGui::SetNextWindowSize(dlg);
     ImGui::SetNextWindowFocus();
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.10f, 0.10f, 0.12f, 0.97f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1, 1, 1, 0.10f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0.10f, 0.10f, 0.12f, 0.97f));
+    ImGui::PushStyleColor(ImGuiCol_Border, TV(1, 1, 1, 0.10f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
     ImGui::Begin("##license", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
@@ -742,19 +844,23 @@ void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out)
     m_hoveringPanel = true;
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddText(ImGui::GetFont(), 19.0f, ImGui::GetCursorScreenPos(), IM_COL32(255, 255, 255, 245), "Tolga Player License");
+    dl->AddText(ImGui::GetFont(), 19.0f, ImGui::GetCursorScreenPos(), TC(255, 255, 255, 245), T("Tolga Player License"));
     ImGui::Dummy({0, 28});
     const float wrap = dlg.x - 44.0f;
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrap);
     if (licensed) {
-        if (lic->state == S::Licensed) ImGui::Text("Licensed to %s. Thank you for supporting Tolga!", lic->email.c_str());
-        else ImGui::TextUnformatted("This is a community build of Tolga. Everything is unlocked.");
+        if (lic->state == S::Licensed) ImGui::TextUnformatted(TF("Licensed to {}. Thank you for supporting Tolga!", {lic->email}).c_str());
+        else ImGui::TextUnformatted(T("This is a community build of Tolga. Everything is unlocked."));
     } else if (lic->state == S::Trial) {
-        ImGui::Text("AirPlay is free to try for %d more day%s. A license unlocks it for good; "
-                    "playing on this computer is always free.", lic->trialDaysLeft, lic->trialDaysLeft == 1 ? "" : "s");
+        const std::string text = lic->trialDaysLeft == 1
+            ? std::string(T("AirPlay is free to try for 1 more day. A license unlocks it for good; "
+                            "playing on this computer is always free."))
+            : TF("AirPlay is free to try for {} more days. A license unlocks it for good; "
+                 "playing on this computer is always free.", {std::to_string(lic->trialDaysLeft)});
+        ImGui::TextUnformatted(text.c_str());
     } else {
-        ImGui::TextUnformatted("The AirPlay trial has ended. Playing on this computer stays free; "
-                               "a license unlocks AirPlay again.");
+        ImGui::TextUnformatted(T("The AirPlay trial has ended. Playing on this computer stays free; "
+                                 "a license unlocks AirPlay again."));
     }
     ImGui::PopTextWrapPos();
 
@@ -764,9 +870,9 @@ void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out)
         ImGui::PushItemWidth(wrap);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10, 7});
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1, 1, 1, 0.07f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, TV(1, 1, 1, 0.07f));
         if (first) ImGui::SetKeyboardFocusHere();
-        enter = ImGui::InputTextWithHint("##licensekey", "Paste your license key (TOLGA1-...)", m_licenseBuf,
+        enter = ImGui::InputTextWithHint("##licensekey", T("Paste your license key (TOLGA1-...)"), m_licenseBuf,
                                          sizeof m_licenseBuf, ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
@@ -783,29 +889,30 @@ void Overlay::drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out)
     const int count = licensed ? 1 : (lic->buyUrl.empty() ? 2 : 3);
     ImGui::SetCursorPos({dlg.x - 22 - bsz.x * count - 10.0f * (count - 1), dlg.y - 20 - bsz.y});
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 15.0f);
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1, 1, 1, 0.08f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.14f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.20f));
+    ImGui::PushStyleColor(ImGuiCol_Button, TV(1, 1, 1, 0.08f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, TV(1, 1, 1, 0.14f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, TV(1, 1, 1, 0.20f));
     if (!licensed && !lic->buyUrl.empty()) {
-        if (ImGui::Button("Buy License", bsz)) out.openBuyPage = true;
+        if (ImGui::Button(T("Buy License"), bsz)) out.openBuyPage = true;
         ImGui::SameLine(0, 10);
     }
-    if (ImGui::Button(licensed ? "Close" : "Not Now", bsz) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+    if (ImGui::Button(licensed ? T("Close") : T("Not Now"), bsz) || ImGui::IsKeyPressed(ImGuiKey_Escape))
         out.closeLicense = true;
     ImGui::PopStyleColor(3);
     if (!licensed) {
         ImGui::SameLine(0, 10);
         const bool ready = m_licenseBuf[0] != 0;
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.62f, 0.60f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.11f, 0.70f, 0.67f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.52f, 0.51f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, TV(0.07f, 0.62f, 0.60f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, TV(0.11f, 0.70f, 0.67f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, TV(0.05f, 0.52f, 0.51f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));  // white on turquoise in both themes
         ImGui::BeginDisabled(!ready);
-        if ((ImGui::Button("Activate", bsz) || enter) && ready) {
+        if ((ImGui::Button(T("Activate"), bsz) || enter) && ready) {
             out.activateLicense = true;
             out.licenseKey = m_licenseBuf;
         }
         ImGui::EndDisabled();
-        ImGui::PopStyleColor(3);
+        ImGui::PopStyleColor(4);
     }
     ImGui::PopStyleVar();
 
@@ -845,8 +952,8 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
 
     // soft vertical gradient instead of flat black
     bg->AddRectFilledMultiColor({0, 0}, size,
-        IM_COL32(28, 29, 36, 255), IM_COL32(28, 29, 36, 255),
-        IM_COL32(12, 12, 15, 255), IM_COL32(12, 12, 15, 255));
+        TC(28, 29, 36, 255), TC(28, 29, 36, 255),
+        TC(12, 12, 15, 255), TC(12, 12, 15, 255));
 
     ImFont* font = ImGui::GetFont();
 
@@ -861,11 +968,11 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
     const char* title = "Tolga Player";
     const float titleSize = 40.0f;
     ImVec2 ts = font->CalcTextSizeA(titleSize, FLT_MAX, 0, title);
-    bg->AddText(font, titleSize, {c.x - ts.x * 0.5f, c.y - 70}, IM_COL32(255, 255, 255, 235), title);
+    bg->AddText(font, titleSize, {c.x - ts.x * 0.5f, c.y - 70}, TC(255, 255, 255, 235), title);
 
-    const char* hint = "Drop a video here, or";
+    const char* hint = T("Drop a video here, or");
     ImVec2 hs = font->CalcTextSizeA(15.0f, FLT_MAX, 0, hint);
-    bg->AddText(font, 15.0f, {c.x - hs.x * 0.5f, c.y - 12}, IM_COL32(255, 255, 255, 120), hint);
+    bg->AddText(font, 15.0f, {c.x - hs.x * 0.5f, c.y - 12}, TC(255, 255, 255, 120), hint);
 
     // "Open File…" pill button
     ImGui::SetNextWindowPos({0, 0});
@@ -874,7 +981,7 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoBringToFrontOnFocus);
-    const char* label = "Open File...";
+    const char* label = T("Open File...");
     ImVec2 ls = ImGui::CalcTextSize(label);
     ImVec2 bsize{ls.x + 40, 36};
     ImVec2 bpos{c.x - bsize.x * 0.5f, c.y + 22};
@@ -883,15 +990,15 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
     const bool hov = ImGui::IsItemHovered();
     ImDrawList* dl = ImGui::GetWindowDrawList();
     dl->AddRectFilled(bpos, {bpos.x + bsize.x, bpos.y + bsize.y},
-                      hov ? IM_COL32(255, 255, 255, 46) : IM_COL32(255, 255, 255, 26), bsize.y * 0.5f);
-    dl->AddText({bpos.x + 20, bpos.y + (bsize.y - ls.y) * 0.5f}, IM_COL32(255, 255, 255, 235), label);
+                      hov ? TC(255, 255, 255, 46) : TC(255, 255, 255, 26), bsize.y * 0.5f);
+    dl->AddText({bpos.x + 20, bpos.y + (bsize.y - ls.y) * 0.5f}, TC(255, 255, 255, 235), label);
     if (hov) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
     if (rows > 0) {
         const float w = std::min(460.0f, size.x - 60.0f);
         const float x0 = c.x - w * 0.5f;
         float y = bpos.y + bsize.y + kListGap;
-        dl->AddText(font, 14.0f, {x0 + 12, y}, IM_COL32(255, 255, 255, 110), "Recent");
+        dl->AddText(font, 14.0f, {x0 + 12, y}, TC(255, 255, 255, 110), T("Recent"));
         y += kHeaderH;
         for (size_t i = 0; i < rows; ++i) {
             const std::string& path = (*m_recent)[i];
@@ -909,7 +1016,7 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
             const bool rh = ImGui::IsItemHovered();
             ImGui::PopID();
             if (rh) {
-                dl->AddRectFilled(r0, r1, IM_COL32(255, 255, 255, 22), 8.0f);
+                dl->AddRectFilled(r0, r1, TC(255, 255, 255, 22), 8.0f);
                 ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
             }
             // folder on the right (dim), the file name takes the rest and is cut with "..."
@@ -924,41 +1031,42 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
                 shown += "...";
             }
             const float ty = y + (kRowH - 2 - 15.0f) * 0.5f;
-            dl->AddText(font, 15.0f, {x0 + 12, ty}, IM_COL32(255, 255, 255, rh ? 245 : 215), shown.c_str());
+            dl->AddText(font, 15.0f, {x0 + 12, ty}, TC(255, 255, 255, rh ? 245 : 215), shown.c_str());
             if (fw > 0) {
                 dl->PushClipRect({x0 + w - 12 - fw, y}, {x0 + w - 12, y + kRowH}, true);
-                dl->AddText(font, 14.0f, {x0 + w - 12 - fw, ty + 1}, IM_COL32(255, 255, 255, 90), folder.c_str());
+                dl->AddText(font, 14.0f, {x0 + w - 12 - fw, ty + 1}, TC(255, 255, 255, 90), folder.c_str());
                 dl->PopClipRect();
             }
             y += kRowH;
         }
         // "Clear Recent"
-        const char* clearLabel = "Clear Recent";
+        const char* clearLabel = T("Clear Recent");
         const ImVec2 cs = font->CalcTextSizeA(14.0f, FLT_MAX, 0, clearLabel);
         const ImVec2 cpos{c.x - cs.x * 0.5f, y + 14};
         ImGui::SetCursorScreenPos({cpos.x - 8, cpos.y - 5});
         if (ImGui::InvisibleButton("##clearRecent", {cs.x + 16, cs.y + 10})) out.clearRecent = true;
         const bool ch = ImGui::IsItemHovered();
         if (ch) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        dl->AddText(font, 14.0f, cpos, IM_COL32(255, 255, 255, ch ? 200 : 100), clearLabel);
+        dl->AddText(font, 14.0f, cpos, TC(255, 255, 255, ch ? 200 : 100), clearLabel);
     }
 
     // at the bottom: "Make Tolga Player your default video player", or what came of it
     if (!m_defaultNote.empty()) {
         const float w = std::min(560.0f, size.x - 40.0f);
         const ImVec2 ns = font->CalcTextSizeA(14.0f, FLT_MAX, w, m_defaultNote.c_str());
-        dl->AddText(font, 14.0f, {c.x - ns.x * 0.5f, size.y - 26 - ns.y}, IM_COL32(255, 255, 255, 140),
+        dl->AddText(font, 14.0f, {c.x - ns.x * 0.5f, size.y - 26 - ns.y}, TC(255, 255, 255, 140),
                     m_defaultNote.c_str(), nullptr, w);
     } else if (m_offerDefault) {
-        const char* label = "Make Tolga Player your default video player";
+        const char* label = T("Make Tolga Player your default video player");
         const ImVec2 ds = font->CalcTextSizeA(14.0f, FLT_MAX, 0, label);
         const ImVec2 dpos{c.x - ds.x * 0.5f, size.y - 26 - ds.y};
         ImGui::SetCursorScreenPos({dpos.x - 8, dpos.y - 5});
         if (ImGui::InvisibleButton("##makeDefault", {ds.x + 16, ds.y + 10})) out.makeDefaultPlayer = true;
         const bool dh = ImGui::IsItemHovered();
         if (dh) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        dl->AddText(font, 14.0f, dpos, IM_COL32(255, 255, 255, dh ? 210 : 105), label);
+        dl->AddText(font, 14.0f, dpos, TC(255, 255, 255, dh ? 210 : 105), label);
     }
+
     ImGui::End();
 }
 
@@ -1000,7 +1108,7 @@ void Overlay::drawControls(const PlayerState& st, bool fullscreen, const AirPlay
 
     ImGui::SetNextWindowPos(p0);
     ImGui::SetNextWindowSize({panelW, panelH});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.07f, 0.07f, 0.09f, 0.72f * a));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0.07f, 0.07f, 0.09f, (g_light ? 0.86f : 0.72f) * a));  // light: less of the video through
     ImGui::Begin("##controls", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollWithMouse);
@@ -1036,7 +1144,7 @@ void Overlay::drawControls(const PlayerState& st, bool fullscreen, const AirPlay
     const ImVec2 gearC{p1.x - pad - 10, row1};
     if (iconButton("##settings", gearC, 15, a)) togglePanel(m_panelTab);
     iconGear(dl, gearC, 18, white, m_panelOpen);
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("Settings");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("%s", T("Settings"));
 
     const ImVec2 fsC{gearC.x - step, row1};
     if (iconButton("##fs", fsC, 15, a)) out.toggleFullscreen = true;
@@ -1068,7 +1176,7 @@ void Overlay::drawControls(const PlayerState& st, bool fullscreen, const AirPlay
     const ImVec2 listC{p0.x + pad + 10, row1};
     if (iconButton("##playlist", listC, 15, a)) togglePlaylist();
     iconPlaylist(dl, listC, 18, white, m_playlistOpen);
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("Playlist");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("%s", T("Playlist"));
 
     if (!tiny) {
         const ImVec2 spk{listC.x + step, row1};
@@ -1152,7 +1260,7 @@ void Overlay::drawControls(const PlayerState& st, bool fullscreen, const AirPlay
             const ImVec2 i1{cx - iw * 0.5f, rowY - 30.0f - ih}, i2{cx + iw * 0.5f, rowY - 30.0f};
             fg->AddRectFilled({i1.x - 2, i1.y - 2}, {i2.x + 2, i2.y + 2}, col(0.05f, 0.05f, 0.06f, 0.95f, a), 8.0f);
             fg->AddImageRounded(ImTextureRef(ImTextureID(intptr_t(m_thumbTex))), i1, i2, {0, 0}, {1, 1},
-                                col(1, 1, 1, 1, a), 6.0f);
+                                IM_COL32(255, 255, 255, int(255 * a)), 6.0f);  // the picture itself, untinted
             fg->AddRect({i1.x - 2, i1.y - 2}, {i2.x + 2, i2.y + 2}, col(1, 1, 1, 0.18f, a), 8.0f);
             bubbleY = i2.y - 2.0f;
         }
@@ -1181,17 +1289,17 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
     ImGui::TextDisabled("AIRPLAY");
     if (!airplay.available) {
         // built from source without the AirPlay module
-        ImGui::MenuItem("This Computer", nullptr, true);
+        ImGui::MenuItem(T("This Computer"), nullptr, true);
         ImGui::Separator();
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 250);
-        ImGui::TextDisabled("Playing on an Apple TV is part of the official Tolga Player app.");
+        ImGui::TextDisabled("%s", T("Playing on an Apple TV is part of the official Tolga Player app."));
         ImGui::PopTextWrapPos();
-        if (ImGui::MenuItem("Get Tolga Player...")) out.openBuyPage = true;
+        if (ImGui::MenuItem(T("Get Tolga Player..."))) out.openBuyPage = true;
         ImGui::EndPopup();
         ImGui::PopStyleVar();
         return;
     }
-    if (ImGui::MenuItem("This Computer", nullptr, airplay.castTarget.empty())) {
+    if (ImGui::MenuItem(T("This Computer"), nullptr, airplay.castTarget.empty())) {
         out.selectCastTarget = true;
         out.castTarget.clear();
     }
@@ -1208,7 +1316,8 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
             out.castTarget = d.deviceId;
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-            ImGui::SetTooltip("%s%s", d.details.c_str(), video ? "" : "\nAudio only - can't play video");
+            const std::string tip = video ? d.details : d.details + "\n" + T("Audio only - can't play video");
+            ImGui::SetTooltip("%s", tip.c_str());
         }
         ImGui::PopID();
     }
@@ -1223,7 +1332,7 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
     if (airplay.searching || count == 0) {
         // animated dots while the network is being scanned
         const int dots = int(ImGui::GetTime() * 3.0) % 4;
-        std::string text = airplay.searching ? "Searching" + std::string(dots, '.') : "No AirPlay devices found";
+        std::string text = airplay.searching ? T("Searching") + std::string(dots, '.') : T("No AirPlay devices found");
         ImGui::Spacing();
         ImGui::TextDisabled("%s", text.c_str());
     }
@@ -1234,10 +1343,11 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
         if (lic->state == S::Trial || lic->state == S::Expired) {
             ImGui::Separator();
             if (lic->state == S::Trial)
-                ImGui::TextDisabled("Free trial: %d day%s left", lic->trialDaysLeft, lic->trialDaysLeft == 1 ? "" : "s");
+                ImGui::TextDisabled("%s", lic->trialDaysLeft == 1 ? T("Free trial: 1 day left")
+                                     : TF("Free trial: {} days left", {std::to_string(lic->trialDaysLeft)}).c_str());
             else
-                ImGui::TextDisabled("The AirPlay trial has ended");
-            if (ImGui::MenuItem(lic->state == S::Trial ? "Enter License..." : "Unlock AirPlay..."))
+                ImGui::TextDisabled("%s", T("The AirPlay trial has ended"));
+            if (ImGui::MenuItem(lic->state == S::Trial ? T("Enter License...") : T("Unlock AirPlay...")))
                 out.openLicense = true;
         }
     }
@@ -1269,7 +1379,7 @@ std::string languageName(const std::string& code) {
     std::string l = code;
     for (char& c : l) c = char(std::tolower(static_cast<unsigned char>(c)));
     for (const auto& [k, n] : names)
-        if (l == k) return n;
+        if (l == k) return T(n);
     if (l.empty() || l == "und") return {};
     return code;
 }
@@ -1308,26 +1418,26 @@ bool displayable(const std::string& text) {
 
 // "No Title (mov_text, Default)" / "Turkish.srt (subrip, External)" / "English (aac, 5.1, Default)"
 std::string trackText(const Track& t) {
-    std::string name = !t.title.empty() ? t.title : t.external ? fileName(t.externalFile) : "No Title";
+    std::string name = !t.title.empty() ? t.title : t.external ? fileName(t.externalFile) : T("No Title");
     if (!displayable(name)) {  // e.g. an Arabic title: show "Arabic" from the language code instead
         const std::string lang = languageName(t.lang);
-        name = !lang.empty() ? lang : "Track " + std::to_string(t.id);
+        name = !lang.empty() ? lang : TF("Track {}", {std::to_string(t.id)});
     }
     std::vector<std::string> info;
     if (!t.codec.empty()) info.push_back(t.codec);
     if (t.type == "audio" && t.channels > 0)
-        info.push_back(t.channels == 6 ? "5.1" : t.channels == 8 ? "7.1" : t.channels == 2 ? "Stereo"
-                                                                    : t.channels == 1 ? "Mono"
-                                                                    : std::to_string(t.channels) + " ch");
+        info.push_back(t.channels == 6 ? "5.1" : t.channels == 8 ? "7.1" : t.channels == 2 ? T("Stereo")
+                                                                    : t.channels == 1 ? T("Mono")
+                                                                    : TF("{} ch", {std::to_string(t.channels)}));
     if (t.type == "video" && t.width > 0) info.push_back(std::to_string(t.width) + "x" + std::to_string(t.height));
     if (t.type == "video" && t.fps > 0) {
         char f[24];
         std::snprintf(f, sizeof f, "%.3gfps", t.fps);
         info.push_back(f);
     }
-    if (t.isDefault) info.push_back("Default");
-    if (t.forced) info.push_back("Forced");
-    if (t.external) info.push_back("External");
+    if (t.isDefault) info.push_back(T("Default"));
+    if (t.forced) info.push_back(T("Forced"));
+    if (t.external) info.push_back(T("External"));
     std::string out = name;
     if (!info.empty()) {
         out += " (";
@@ -1343,9 +1453,9 @@ bool toggleSwitch(const char* id, ImVec2 pos, bool on) {
     ImGui::SetCursorScreenPos(pos);
     const bool clicked = ImGui::InvisibleButton(id, size);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(pos, {pos.x + size.x, pos.y + size.y}, on ? kAccent : IM_COL32(255, 255, 255, 45), size.y * 0.5f);
+    dl->AddRectFilled(pos, {pos.x + size.x, pos.y + size.y}, on ? kAccent : TC(255, 255, 255, 45), size.y * 0.5f);
     const float kx = on ? pos.x + size.x - size.y * 0.5f : pos.x + size.y * 0.5f;
-    dl->AddCircleFilled({kx, pos.y + size.y * 0.5f}, size.y * 0.5f - 3, IM_COL32(255, 255, 255, 250), 24);
+    dl->AddCircleFilled({kx, pos.y + size.y * 0.5f}, size.y * 0.5f - 3, TC(255, 255, 255, 250), 24);
     if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     return clicked;
 }
@@ -1360,8 +1470,8 @@ bool pillButton(const char* label, ImVec2 pos, float height = 34.0f) {
     ImGui::PopID();
     const bool hov = ImGui::IsItemHovered();
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(pos, {pos.x + size.x, pos.y + size.y}, IM_COL32(255, 255, 255, hov ? 40 : 26), 8.0f);
-    dl->AddText({pos.x + 20, pos.y + (size.y - ts.y) * 0.5f}, IM_COL32(255, 255, 255, 240), label);
+    dl->AddRectFilled(pos, {pos.x + size.x, pos.y + size.y}, TC(255, 255, 255, hov ? 40 : 26), 8.0f);
+    dl->AddText({pos.x + 20, pos.y + (size.y - ts.y) * 0.5f}, TC(255, 255, 255, 240), label);
     if (hov) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     return clicked;
 }
@@ -1385,7 +1495,7 @@ void iconWaveform(ImDrawList* dl, ImVec2 c, ImU32 col) {
 void iconBubble(ImDrawList* dl, ImVec2 c, ImU32 col) {
     dl->AddRectFilled({c.x - 9, c.y - 7}, {c.x + 9, c.y + 5}, col, 3.0f);
     dl->AddTriangleFilled({c.x - 6, c.y + 4}, {c.x - 6, c.y + 9}, {c.x - 1, c.y + 4}, col);
-    const ImU32 hole = IM_COL32(40, 40, 46, 255);
+    const ImU32 hole = TC(40, 40, 46, 255);
     dl->AddLine({c.x - 5, c.y - 3}, {c.x + 2, c.y - 3}, hole, 1.5f);
     dl->AddLine({c.x + 4, c.y - 3}, {c.x + 5, c.y - 3}, hole, 1.5f);
     dl->AddLine({c.x - 5, c.y + 1}, {c.x - 2, c.y + 1}, hole, 1.5f);
@@ -1401,8 +1511,8 @@ bool trackList(const char* id, const std::vector<const Track*>& tracks, int64_t 
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
     const ImVec2 p1{p0.x + width, p0.y + std::max(rows, 1) * rowH + 8};
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(p0, p1, IM_COL32(255, 255, 255, 10), 10.0f);
-    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 22), 10.0f);
+    dl->AddRectFilled(p0, p1, TC(255, 255, 255, 10), 10.0f);
+    dl->AddRect(p0, p1, TC(255, 255, 255, 22), 10.0f);
 
     bool clicked = false;
     ImGui::PushID(id);
@@ -1419,8 +1529,8 @@ bool trackList(const char* id, const std::vector<const Track*>& tracks, int64_t 
         }
         const bool hov = ImGui::IsItemHovered();
         ImGui::PopID();
-        if (hov) dl->AddRectFilled(a, b, IM_COL32(255, 255, 255, 14), 7.0f);
-        if (r > 0) dl->AddLine({a.x + 10, a.y}, {b.x - 10, a.y}, IM_COL32(255, 255, 255, 18));
+        if (hov) dl->AddRectFilled(a, b, TC(255, 255, 255, 14), 7.0f);
+        if (r > 0) dl->AddLine({a.x + 10, a.y}, {b.x - 10, a.y}, TC(255, 255, 255, 18));
         if (tid == selected) dl->AddRectFilled({a.x + 8, a.y + 9}, {a.x + 11, b.y - 9}, kAccent, 1.5f);
 
         const float ty = a.y + (rowH - ImGui::GetTextLineHeight()) * 0.5f;
@@ -1430,17 +1540,52 @@ bool trackList(const char* id, const std::vector<const Track*>& tracks, int64_t 
             if (!lang.empty()) {
                 const ImVec2 ls = ImGui::CalcTextSize(lang.c_str());
                 const ImVec2 ba{right - ls.x - 12, a.y + 8}, bb{right, b.y - 8};
-                dl->AddRectFilled(ba, bb, IM_COL32(255, 255, 255, 34), 5.0f);
-                dl->AddText({ba.x + 6, ty}, IM_COL32(255, 255, 255, 220), lang.c_str());
+                dl->AddRectFilled(ba, bb, TC(255, 255, 255, 34), 5.0f);
+                dl->AddText({ba.x + 6, ty}, TC(255, 255, 255, 220), lang.c_str());
                 right = ba.x - 8;
             }
             const std::string text = trackText(*t);
             dl->PushClipRect({a.x + 20, a.y}, {right, b.y}, true);
-            dl->AddText({a.x + 22, ty}, IM_COL32(255, 255, 255, 240), text.c_str());
+            dl->AddText({a.x + 22, ty}, TC(255, 255, 255, 240), text.c_str());
             dl->PopClipRect();
         } else {
-            dl->AddText({a.x + 22, ty}, IM_COL32(255, 255, 255, 110), "<None>");
+            dl->AddText({a.x + 22, ty}, TC(255, 255, 255, 110), T("<None>"));
         }
+    }
+    ImGui::PopID();
+    ImGui::SetCursorScreenPos({p0.x, p1.y});
+    ImGui::Dummy({width, 0});
+    return clicked;
+}
+
+// A rounded list of choices like trackList's; returns true and sets `picked` when a row was clicked.
+bool choiceList(const char* id, const std::vector<std::string>& labels, int selected, float width, int& picked) {
+    const float rowH = 38.0f;
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const ImVec2 p1{p0.x + width, p0.y + std::max<int>(int(labels.size()), 1) * rowH + 8};
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p0, p1, TC(255, 255, 255, 10), 10.0f);
+    dl->AddRect(p0, p1, TC(255, 255, 255, 22), 10.0f);
+    bool clicked = false;
+    ImGui::PushID(id);
+    for (int r = 0; r < int(labels.size()); ++r) {
+        const ImVec2 a{p0.x + 4, p0.y + 4 + r * rowH};
+        const ImVec2 b{p1.x - 4, a.y + rowH};
+        ImGui::SetCursorScreenPos(a);
+        ImGui::PushID(r);
+        if (ImGui::InvisibleButton("##row", {b.x - a.x, rowH})) {
+            picked = r;
+            clicked = true;
+        }
+        const bool hov = ImGui::IsItemHovered();
+        ImGui::PopID();
+        if (hov) dl->AddRectFilled(a, b, TC(255, 255, 255, 14), 7.0f);
+        if (r > 0) dl->AddLine({a.x + 10, a.y}, {b.x - 10, a.y}, TC(255, 255, 255, 18));
+        if (r == selected) dl->AddRectFilled({a.x + 8, a.y + 9}, {a.x + 11, b.y - 9}, kAccent, 1.5f);
+        const float ty = a.y + (rowH - ImGui::GetTextLineHeight()) * 0.5f;
+        dl->PushClipRect({a.x + 20, a.y}, {b.x - 10, b.y}, true);
+        dl->AddText({a.x + 22, ty}, TC(255, 255, 255, 240), labels[size_t(r)].c_str());
+        dl->PopClipRect();
     }
     ImGui::PopID();
     ImGui::SetCursorScreenPos({p0.x, p1.y});
@@ -1454,12 +1599,12 @@ bool sectionHeader(const char* number, const char* title, float width, const boo
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float x = p.x;
     if (number) {
-        dl->AddRectFilled({x, p.y + 4}, {x + 18, p.y + 22}, IM_COL32(255, 255, 255, 60), 4.0f);
+        dl->AddRectFilled({x, p.y + 4}, {x + 18, p.y + 22}, TC(255, 255, 255, 60), 4.0f);
         const ImVec2 ns = ImGui::CalcTextSize(number);
-        dl->AddText({x + 9 - ns.x * 0.5f, p.y + 13 - ns.y * 0.5f}, IM_COL32(20, 20, 24, 255), number);
+        dl->AddText({x + 9 - ns.x * 0.5f, p.y + 13 - ns.y * 0.5f}, TC(20, 20, 24, 255), number);
         x += 28;
     }
-    dl->AddText(ImGui::GetFont(), 17.0f, {x, p.y + 3}, IM_COL32(255, 255, 255, 245), title);
+    dl->AddText(ImGui::GetFont(), 17.0f, {x, p.y + 3}, TC(255, 255, 255, 245), title);
     bool clicked = false;
     if (toggle) {
         ImGui::PushID(title);
@@ -1480,9 +1625,9 @@ bool textField(const char* id, char* buf, size_t size, float width, ImGuiInputTe
                const char* hint = nullptr) {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10, 8});
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1, 1, 1, 0.07f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(1, 1, 1, 0.10f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1, 1, 1, 0.12f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, TV(1, 1, 1, 0.07f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, TV(1, 1, 1, 0.10f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, TV(1, 1, 1, 0.12f));
     ImGui::SetNextItemWidth(width);
     const bool enter = hint ? ImGui::InputTextWithHint(id, hint, buf, size, flags | ImGuiInputTextFlags_EnterReturnsTrue)
                             : ImGui::InputText(id, buf, size, flags | ImGuiInputTextFlags_EnterReturnsTrue);
@@ -1492,7 +1637,7 @@ bool textField(const char* id, char* buf, size_t size, float width, ImGuiInputTe
 }
 
 void label(const char* text) {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.55f));
+    ImGui::PushStyleColor(ImGuiCol_Text, TV(1, 1, 1, 0.55f));
     ImGui::TextUnformatted(text);
     ImGui::PopStyleColor();
 }
@@ -1504,10 +1649,10 @@ bool backHeader(const char* title) {
     const bool back = ImGui::InvisibleButton("##back", {30, 28});
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImVec2 c{p.x + 10, p.y + 14};
-    dl->AddLine({c.x + 4, c.y - 7}, {c.x - 3, c.y}, IM_COL32(255, 255, 255, 230), 2.0f);
-    dl->AddLine({c.x - 3, c.y}, {c.x + 4, c.y + 7}, IM_COL32(255, 255, 255, 230), 2.0f);
+    dl->AddLine({c.x + 4, c.y - 7}, {c.x - 3, c.y}, TC(255, 255, 255, 230), 2.0f);
+    dl->AddLine({c.x - 3, c.y}, {c.x + 4, c.y + 7}, TC(255, 255, 255, 230), 2.0f);
     if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-    dl->AddText(ImGui::GetFont(), 17.0f, {p.x + 30, p.y + 4}, IM_COL32(255, 255, 255, 245), title);
+    dl->AddText(ImGui::GetFont(), 17.0f, {p.x + 30, p.y + 4}, TC(255, 255, 255, 245), title);
     ImGui::SetCursorScreenPos({p.x, p.y + 40});
     return back;
 }
@@ -1517,30 +1662,30 @@ bool backHeader(const char* title) {
 void Overlay::drawAccountForm(const OnlineView& online, float inner, OverlayActions& out) {
     // With a key built into the app only the (optional) login is shown here.
     const bool builtIn = online.settings && online.settings->builtInKey;
-    if (backHeader("OpenSubtitles Account")) m_accountOpen = false;
+    if (backHeader(T("OpenSubtitles Account"))) m_accountOpen = false;
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + inner);
     if (builtIn)
-        label("Optional: log in with your opensubtitles.com account to raise the daily download limit.");
+        label(T("Optional: log in with your opensubtitles.com account to raise the daily download limit."));
     else
-        label("Searching needs a free API key. Create one at opensubtitles.com/en/consumers "
-              "and paste it below. An account is optional; logging in raises the daily download limit.");
+        label(T("Searching needs a free API key. Create one at opensubtitles.com/en/consumers "
+                "and paste it below. An account is optional; logging in raises the daily download limit."));
     ImGui::PopTextWrapPos();
     ImGui::Dummy({0, 10});
 
     if (!builtIn) {
-        label("API Key");
+        label(T("API Key"));
         textField("##key", m_keyBuf, sizeof m_keyBuf, inner);
         ImGui::Dummy({0, 6});
     }
-    label(builtIn ? "User Name" : "User Name (optional)");
+    label(builtIn ? T("User Name") : T("User Name (optional)"));
     textField("##user", m_userBuf, sizeof m_userBuf, inner);
     ImGui::Dummy({0, 6});
-    label(builtIn ? "Password" : "Password (optional)");
+    label(builtIn ? T("Password") : T("Password (optional)"));
     const bool enter = textField("##pass", m_passBuf, sizeof m_passBuf, inner, ImGuiInputTextFlags_Password);
     ImGui::Dummy({0, 14});
 
     const ImVec2 bp = ImGui::GetCursorScreenPos();
-    if (pillButton("Save", bp) || enter) {
+    if (pillButton(T("Save"), bp) || enter) {
         out.onlineSaveSettings = true;
         out.onlineApiKey = m_keyBuf;
         out.onlineUser = m_userBuf;
@@ -1549,7 +1694,7 @@ void Overlay::drawAccountForm(const OnlineView& online, float inner, OverlayActi
     }
     ImGui::Dummy({0, 40});
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + inner);
-    ImGui::TextDisabled("Stored on this computer, readable only by your user account.");
+    ImGui::TextDisabled("%s", T("Stored on this computer, readable only by your user account."));
     ImGui::PopTextWrapPos();
 }
 
@@ -1576,8 +1721,8 @@ void iconSliders(ImDrawList* dl, ImVec2 c, ImU32 col) {
 ImVec2 card(float width, float height) {
     const ImVec2 p = ImGui::GetCursorScreenPos();
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(p, {p.x + width, p.y + height}, IM_COL32(255, 255, 255, 10), 10.0f);
-    dl->AddRect(p, {p.x + width, p.y + height}, IM_COL32(255, 255, 255, 22), 10.0f);
+    dl->AddRectFilled(p, {p.x + width, p.y + height}, TC(255, 255, 255, 10), 10.0f);
+    dl->AddRect(p, {p.x + width, p.y + height}, TC(255, 255, 255, 22), 10.0f);
     return p;
 }
 
@@ -1607,9 +1752,9 @@ bool Overlay::delayCard(const char* id, double value, float inner, double& chang
     const float h = 118.0f;
     const ImVec2 p = card(inner, h);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImU32 white = IM_COL32(255, 255, 255, 240), grey = IM_COL32(255, 255, 255, 140);
+    const ImU32 white = TC(255, 255, 255, 240), grey = TC(255, 255, 255, 140);
     iconClock(dl, {p.x + 24, p.y + 24}, white);
-    dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 42, p.y + 15}, white, "Delay");
+    dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 42, p.y + 15}, white, T("Delay"));
 
     bool edited = false;
     const float fieldW = 72.0f;
@@ -1619,9 +1764,9 @@ bool Overlay::delayCard(const char* id, double value, float inner, double& chang
     // ticks every 0.5 s
     for (int i = 0; i <= 20; ++i) {
         const float x = x0 + (x1 - x0) * i / 20.0f;
-        dl->AddCircleFilled({x, ty + 9}, i % 10 == 0 ? 1.4f : 0.9f, IM_COL32(255, 255, 255, 70));
+        dl->AddCircleFilled({x, ty + 9}, i % 10 == 0 ? 1.4f : 0.9f, TC(255, 255, 255, 70));
     }
-    dl->AddLine({x0, ty}, {x1, ty}, IM_COL32(255, 255, 255, 45), 3.0f);
+    dl->AddLine({x0, ty}, {x1, ty}, TC(255, 255, 255, 45), 3.0f);
 
     ImGui::SetCursorScreenPos({x0 - 8, ty - 14});
     ImGui::InvisibleButton("##track", {x1 - x0 + 16, 28});
@@ -1635,7 +1780,7 @@ bool Overlay::delayCard(const char* id, double value, float inner, double& chang
     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) { changed = 0.0; edited = true; }
     const double shown = edited ? changed : value;
     const float kx = x0 + (x1 - x0) * float((std::clamp(shown, -double(range), double(range)) + range) / (2 * range));
-    dl->AddRectFilled({kx - 4, ty - 10}, {kx + 4, ty + 10}, IM_COL32(255, 255, 255, 250), 4.0f);
+    dl->AddRectFilled({kx - 4, ty - 10}, {kx + 4, ty + 10}, TC(255, 255, 255, 250), 4.0f);
 
     char buf[32];
     std::snprintf(buf, sizeof buf, "%gs", std::round(shown * 10.0) / 10.0);
@@ -1652,7 +1797,7 @@ bool Overlay::delayCard(const char* id, double value, float inner, double& chang
     ImGui::SetCursorScreenPos({p.x + inner - fieldW - 18, ty - 16});
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 7});
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1, 1, 1, 0.07f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, TV(1, 1, 1, 0.07f));
     ImGui::SetNextItemWidth(fieldW);
     double fieldValue = shown;
     if (ImGui::InputDouble("##value", &fieldValue, 0, 0, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -1672,9 +1817,9 @@ void Overlay::equalizerCard(float inner, OverlayActions& out) {
     const float h = 316.0f;
     const ImVec2 p = card(inner, h);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImU32 white = IM_COL32(255, 255, 255, 240), grey = IM_COL32(255, 255, 255, 140);
+    const ImU32 white = TC(255, 255, 255, 240), grey = TC(255, 255, 255, 140);
     iconSliders(dl, {p.x + 24, p.y + 24}, white);
-    dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 42, p.y + 15}, white, "Equalizer");
+    dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 42, p.y + 15}, white, T("Equalizer"));
 
     bool changed = false;
     // ---- preset menu
@@ -1683,14 +1828,14 @@ void Overlay::equalizerCard(float inner, OverlayActions& out) {
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 8.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {6, 6});
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1, 1, 1, 0.09f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(1, 1, 1, 0.13f));
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1, 1, 1, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, TV(1, 1, 1, 0.09f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, TV(1, 1, 1, 0.13f));
+    ImGui::PushStyleColor(ImGuiCol_Button, TV(1, 1, 1, 0.0f));
     ImGui::SetNextItemWidth(inner - 36 - 70);
-    if (ImGui::BeginCombo("##preset", kEqPresets[m_eqPreset].name, ImGuiComboFlags_HeightLargest)) {
+    if (ImGui::BeginCombo("##preset", T(kEqPresets[m_eqPreset].name), ImGuiComboFlags_HeightLargest)) {
         m_menuOpen = true;
         for (int i = 1; i < int(std::size(kEqPresets)); ++i) {
-            if (ImGui::Selectable(kEqPresets[i].name, i == m_eqPreset)) {
+            if (ImGui::Selectable(T(kEqPresets[i].name), i == m_eqPreset)) {
                 m_eqPreset = i;
                 std::copy(std::begin(kEqPresets[i].gains), std::end(kEqPresets[i].gains), m_eqGains);
                 changed = true;
@@ -1711,9 +1856,9 @@ void Overlay::equalizerCard(float inner, OverlayActions& out) {
     }
     const bool rh = ImGui::IsItemHovered();
     ImGui::PopID();
-    const ImVec2 rs = ImGui::CalcTextSize("Reset");
+    const ImVec2 rs = ImGui::CalcTextSize(T("Reset"));
     dl->AddText({p.x + inner - 18 - 30 - rs.x * 0.5f, p.y + 46 + (31 - rs.y) * 0.5f},
-                IM_COL32(255, 255, 255, rh ? 230 : 140), "Reset");
+                TC(255, 255, 255, rh ? 230 : 140), T("Reset"));
 
     // ---- 10 vertical band sliders, -12..+12 dB
     const float top = p.y + 104, bottom = p.y + 266;
@@ -1725,8 +1870,8 @@ void Overlay::equalizerCard(float inner, OverlayActions& out) {
     for (int b = 0; b < 10; ++b) {
         const float x = x0 + b * step;
         for (int t = 0; t <= 8; ++t)  // dots every 3 dB
-            dl->AddCircleFilled({x + 7, top + (bottom - top) * t / 8.0f}, 0.9f, IM_COL32(255, 255, 255, 70));
-        dl->AddLine({x, top}, {x, bottom}, IM_COL32(255, 255, 255, 45), 3.0f);
+            dl->AddCircleFilled({x + 7, top + (bottom - top) * t / 8.0f}, 0.9f, TC(255, 255, 255, 70));
+        dl->AddLine({x, top}, {x, bottom}, TC(255, 255, 255, 45), 3.0f);
         ImGui::SetCursorScreenPos({x - 12, top - 8});
         ImGui::PushID(b);
         ImGui::InvisibleButton("##band", {24, bottom - top + 16});
@@ -1750,7 +1895,7 @@ void Overlay::equalizerCard(float inner, OverlayActions& out) {
         }
         ImGui::PopID();
         const float ky = zeroY - m_eqGains[b] / 12.0f * (bottom - top) * 0.5f;
-        dl->AddRectFilled({x - 9, ky - 4}, {x + 9, ky + 4}, IM_COL32(255, 255, 255, 250), 4.0f);
+        dl->AddRectFilled({x - 9, ky - 4}, {x + 9, ky + 4}, TC(255, 255, 255, 250), 4.0f);
         // frequency label
         const float f = MpvPlayer::kEqFrequencies[b];
         const std::string fl = f < 1000 ? std::to_string(int(f)) : std::to_string(int(f / 1000)) + "k";
@@ -1825,11 +1970,11 @@ int segmented(const char* id, const char* const* labels, int count, int selected
     float total = 0;
     std::vector<float> widths;
     for (int i = 0; i < count; ++i) {
-        widths.push_back(ImGui::CalcTextSize(labels[i]).x + padX * 2);
+        widths.push_back(ImGui::CalcTextSize(T(labels[i])).x + padX * 2);
         total += widths.back();
     }
     const float scale = total > maxW ? maxW / total : 1.0f;  // squeeze when the panel is narrow
-    dl->AddRectFilled(pos, {pos.x + total * scale, pos.y + h}, IM_COL32(255, 255, 255, 22), 7.0f);
+    dl->AddRectFilled(pos, {pos.x + total * scale, pos.y + h}, TC(255, 255, 255, 22), 7.0f);
     int clicked = -1;
     float x = pos.x;
     ImGui::PushID(id);
@@ -1840,12 +1985,12 @@ int segmented(const char* id, const char* const* labels, int count, int selected
         if (ImGui::InvisibleButton("##seg", {w, h})) clicked = i;
         const bool hov = ImGui::IsItemHovered();
         ImGui::PopID();
-        if (i == selected)  dl->AddRectFilled({x, pos.y}, {x + w, pos.y + h}, IM_COL32(34, 196, 186, 255), 7.0f);
-        else if (hov)       dl->AddRectFilled({x, pos.y}, {x + w, pos.y + h}, IM_COL32(255, 255, 255, 18), 7.0f);
+        if (i == selected)  dl->AddRectFilled({x, pos.y}, {x + w, pos.y + h}, TC(34, 196, 186, 255), 7.0f);
+        else if (hov)       dl->AddRectFilled({x, pos.y}, {x + w, pos.y + h}, TC(255, 255, 255, 18), 7.0f);
         if (i > 0 && i != selected && i - 1 != selected)
-            dl->AddLine({x, pos.y + 8}, {x, pos.y + h - 8}, IM_COL32(255, 255, 255, 50));
-        const ImVec2 ts = ImGui::CalcTextSize(labels[i]);
-        dl->AddText({x + (w - ts.x) * 0.5f, pos.y + (h - ts.y) * 0.5f}, IM_COL32(255, 255, 255, 240), labels[i]);
+            dl->AddLine({x, pos.y + 8}, {x, pos.y + h - 8}, TC(255, 255, 255, 50));
+        const ImVec2 ts = ImGui::CalcTextSize(T(labels[i]));
+        dl->AddText({x + (w - ts.x) * 0.5f, pos.y + (h - ts.y) * 0.5f}, TC(255, 255, 255, 240), T(labels[i]));
         x += w;
     }
     ImGui::PopID();
@@ -1859,7 +2004,7 @@ const char* const kRotations[] = {"0\xC2\xB0", "90\xC2\xB0", "180\xC2\xB0", "270
 }  // namespace
 
 void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out) {
-    const ImU32 white = IM_COL32(255, 255, 255, 240), grey = IM_COL32(255, 255, 255, 140);
+    const ImU32 white = TC(255, 255, 255, 240), grey = TC(255, 255, 255, 140);
 
     // ---- aspect / crop / rotation
     {
@@ -1868,17 +2013,17 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const float segW = inner - 36;
         iconAspect(dl, {p.x + 26, p.y + 24}, white);
-        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 15}, white, "Aspect Ratio");
+        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 15}, white, T("Aspect Ratio"));
         int c = segmented("aspect", kAspects, 6, m_aspectIdx, {p.x + 18, p.y + 46}, segW);
         if (c >= 0) { m_aspectIdx = c; out.setAspect = true; out.aspect = c == 0 ? "" : kAspects[c]; }
 
         iconCrop(dl, {p.x + 26, p.y + 100}, white);
-        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 91}, white, "Crop");
+        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 91}, white, T("Crop"));
         c = segmented("crop", kCrops, 6, m_cropIdx, {p.x + 18, p.y + 122}, segW);
         if (c >= 0) { m_cropIdx = c; out.setCrop = true; out.crop = c == 0 ? "" : kCrops[c]; }
 
         iconRotate(dl, {p.x + 26, p.y + 176}, white);
-        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 167}, white, "Rotation");
+        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 167}, white, T("Rotation"));
         const int rotIdx = ((st.rotate % 360) + 360) % 360 / 90;
         c = segmented("rot", kRotations, 4, rotIdx, {p.x + 18, p.y + 196}, segW * 0.6f);
         if (c >= 0) { out.setRotate = true; out.rotate = c * 90; }
@@ -1893,14 +2038,14 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
         const ImVec2 p = card(inner, h);
         ImDrawList* dl = ImGui::GetWindowDrawList();
         iconSpeed(dl, {p.x + 26, p.y + 24}, white);
-        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 15}, white, "Speed");
+        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 15}, white, T("Speed"));
         const float fieldW = 72.0f;
         const float x0 = p.x + 22, x1 = p.x + inner - fieldW - 34;
         const float ty = p.y + 70;
         auto toX = [&](double sp) { return x0 + (x1 - x0) * float((std::log2(sp) + 2.0) / 6.0); };
         for (int i = 0; i <= 24; ++i)
-            dl->AddCircleFilled({x0 + (x1 - x0) * i / 24.0f, ty + 9}, i % 8 == 0 ? 1.4f : 0.9f, IM_COL32(255, 255, 255, 70));
-        dl->AddLine({x0, ty}, {x1, ty}, IM_COL32(255, 255, 255, 45), 3.0f);
+            dl->AddCircleFilled({x0 + (x1 - x0) * i / 24.0f, ty + 9}, i % 8 == 0 ? 1.4f : 0.9f, TC(255, 255, 255, 70));
+        dl->AddLine({x0, ty}, {x1, ty}, TC(255, 255, 255, 45), 3.0f);
         ImGui::SetCursorScreenPos({x0 - 8, ty - 14});
         ImGui::InvisibleButton("##speed", {x1 - x0 + 16, 28});
         double shown = st.speed;
@@ -1915,7 +2060,7 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
         }
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) { out.setSpeed = true; out.speed = 1.0; }
         const float kx = toX(std::clamp(shown, 0.25, 16.0));
-        dl->AddRectFilled({kx - 4, ty - 10}, {kx + 4, ty + 10}, IM_COL32(255, 255, 255, 250), 4.0f);
+        dl->AddRectFilled({kx - 4, ty - 10}, {kx + 4, ty + 10}, TC(255, 255, 255, 250), 4.0f);
         char buf[32];
         std::snprintf(buf, sizeof buf, "%gx", std::round(shown * 100.0) / 100.0);
         const ImVec2 vs = ImGui::CalcTextSize(buf);
@@ -1930,7 +2075,7 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
         ImGui::SetCursorScreenPos({p.x + inner - fieldW - 18, ty - 16});
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 7});
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1, 1, 1, 0.07f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, TV(1, 1, 1, 0.07f));
         ImGui::SetNextItemWidth(fieldW);
         double field = shown;
         if (ImGui::InputDouble("##speedv", &field, 0, 0, "%.2f", ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -1950,7 +2095,7 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
         const ImVec2 p = card(inner, h);
         ImDrawList* dl = ImGui::GetWindowDrawList();
         iconChip(dl, {p.x + 26, p.y + 26}, white);
-        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 17}, white, "Hardware Decoding");
+        dl->AddText(ImGui::GetFont(), 16.0f, {p.x + 44, p.y + 17}, white, T("Hardware Decoding"));
         if (toggleSwitch("##hwdec", {p.x + inner - 18 - 44, p.y + 14}, st.hwdec)) {
             out.setHwdec = true;
             out.hwdec = !st.hwdec;
@@ -1963,9 +2108,9 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
     // ---- picture adjustments, -100..100 with a reset button each
     {
         struct Row { const char* label; const char* prop; int value; };
-        const Row rows[] = {{"Brightness", "brightness", st.brightness}, {"Contrast", "contrast", st.contrast},
-                            {"Saturation", "saturation", st.saturation}, {"Gamma", "gamma", st.gamma},
-                            {"Hue", "hue", st.hue}};
+        const Row rows[] = {{T("Brightness"), "brightness", st.brightness}, {T("Contrast"), "contrast", st.contrast},
+                            {T("Saturation"), "saturation", st.saturation}, {T("Gamma"), "gamma", st.gamma},
+                            {T("Hue"), "hue", st.hue}};
         const float rowH = 34.0f;
         const float h = 14 + rowH * 5 + 8;
         const ImVec2 p = card(inner, h);
@@ -1976,7 +2121,7 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
             const Row& r = rows[i];
             const float cy = p.y + 14 + rowH * i + rowH * 0.5f;
             dl->AddText({p.x + 18, cy - ImGui::GetTextLineHeight() * 0.5f}, white, r.label);
-            dl->AddLine({x0, cy}, {x1, cy}, IM_COL32(255, 255, 255, 45), 3.0f);
+            dl->AddLine({x0, cy}, {x1, cy}, TC(255, 255, 255, 45), 3.0f);
             ImGui::SetCursorScreenPos({x0 - 8, cy - 12});
             ImGui::PushID(r.prop);
             ImGui::InvisibleButton("##pic", {x1 - x0 + 16, 24});
@@ -1992,13 +2137,13 @@ void Overlay::videoCards(const PlayerState& st, float inner, OverlayActions& out
                 if (ImGui::IsMouseDoubleClicked(0)) { out.pictureProperty = r.prop; out.pictureValue = 0; }
             }
             const float kx = x0 + (x1 - x0) * (v + 100) / 200.0f;
-            dl->AddCircleFilled({kx, cy}, 8.0f, IM_COL32(255, 255, 255, 245), 24);
+            dl->AddCircleFilled({kx, cy}, 8.0f, TC(255, 255, 255, 245), 24);
             // reset button
             const ImVec2 rc{p.x + inner - 26, cy};
             ImGui::SetCursorScreenPos({rc.x - 11, rc.y - 11});
             if (ImGui::InvisibleButton("##reset", {22, 22})) { out.pictureProperty = r.prop; out.pictureValue = 0; }
-            const ImU32 rcol = IM_COL32(255, 255, 255, ImGui::IsItemHovered() ? 230 : (v != 0 ? 170 : 90));
-            dl->AddCircleFilled(rc, 9.0f, IM_COL32(255, 255, 255, 25), 20);
+            const ImU32 rcol = TC(255, 255, 255, ImGui::IsItemHovered() ? 230 : (v != 0 ? 170 : 90));
+            dl->AddCircleFilled(rc, 9.0f, TC(255, 255, 255, 25), 20);
             dl->PathArcTo(rc, 5.0f, 0.6f, 5.6f, 14);
             dl->PathStroke(rcol, 0, 1.4f);
             dl->AddTriangleFilled({rc.x + 3.5f, rc.y - 5.5f}, {rc.x + 6.5f, rc.y - 1.0f}, {rc.x + 1.5f, rc.y - 1.0f}, rcol);
@@ -2070,8 +2215,8 @@ bool footerButton(const char* id, ImVec2 c, bool active, void (*draw)(ImDrawList
     const bool clicked = ImGui::InvisibleButton(id, {26, 26});
     const bool hov = ImGui::IsItemHovered();
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    if (hov) dl->AddCircleFilled(c, 13, IM_COL32(255, 255, 255, 20), 20);
-    draw(dl, c, active ? IM_COL32(110, 165, 255, 255) : IM_COL32(255, 255, 255, hov ? 235 : 170));
+    if (hov) dl->AddCircleFilled(c, 13, TC(255, 255, 255, 20), 20);
+    draw(dl, c, active ? TC(110, 165, 255, 255) : TC(255, 255, 255, hov ? 235 : 170));
     return clicked;
 }
 
@@ -2090,7 +2235,7 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
 
     ImGui::SetNextWindowPos({x, 0});
     ImGui::SetNextWindowSize({w, size.y});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.14f, 0.99f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0.12f, 0.12f, 0.14f, 0.99f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
     ImGui::Begin("##playlist", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
@@ -2101,13 +2246,13 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
     const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
     if (hovered) m_hoveringPanel = true;
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddLine({x + w - 1, 0}, {x + w - 1, size.y}, IM_COL32(255, 255, 255, 26));
-    const ImU32 white = IM_COL32(255, 255, 255, 235);
+    dl->AddLine({x + w - 1, 0}, {x + w - 1, size.y}, TC(255, 255, 255, 26));
+    const ImU32 white = TC(255, 255, 255, 235);
 
     // ---- header: [playlist | chapters] tabs, close button on the right
     const float hy = 18.0f + topInset();
     const ImVec2 t0{x + 20, hy};
-    dl->AddRectFilled(t0, {t0.x + 96, t0.y + 36}, IM_COL32(255, 255, 255, 18), 18.0f);
+    dl->AddRectFilled(t0, {t0.x + 96, t0.y + 36}, TC(255, 255, 255, 18), 18.0f);
     for (int i = 0; i < 2; ++i) {
         const ImVec2 a{t0.x + 4 + i * 44.0f, t0.y + 4};
         ImGui::SetCursorScreenPos(a);
@@ -2116,7 +2261,7 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
         const bool hov = ImGui::IsItemHovered();
         ImGui::PopID();
         const bool sel = (i == 1) == m_chaptersTab;
-        if (sel || hov) dl->AddRectFilled(a, {a.x + 44, a.y + 28}, IM_COL32(255, 255, 255, sel ? 34 : 16), 14.0f);
+        if (sel || hov) dl->AddRectFilled(a, {a.x + 44, a.y + 28}, TC(255, 255, 255, sel ? 34 : 16), 14.0f);
         const ImVec2 ic{a.x + 22, a.y + 14};
         if (i == 0) iconPlaylist(dl, ic, 18, white, false);
         else        iconChapters(dl, ic, white);
@@ -2124,7 +2269,7 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
     const ImVec2 closeC{x + w - 38, hy + 18};
     ImGui::SetCursorScreenPos({closeC.x - 18, closeC.y - 18});
     if (ImGui::InvisibleButton("##plclose", {36, 36})) m_playlistOpen = false;
-    dl->AddCircleFilled(closeC, 18, IM_COL32(255, 255, 255, ImGui::IsItemHovered() ? 36 : 22), 32);
+    dl->AddCircleFilled(closeC, 18, TC(255, 255, 255, ImGui::IsItemHovered() ? 36 : 22), 32);
     dl->AddLine({closeC.x + 3, closeC.y - 6}, {closeC.x - 3, closeC.y}, white, 2.0f);
     dl->AddLine({closeC.x - 3, closeC.y}, {closeC.x + 3, closeC.y + 6}, white, 2.0f);
 
@@ -2155,25 +2300,25 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
             if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0, 6.0f)) m_dragFrom = i;
             ImGui::PopID();
             const bool sel = m_playlistSelected == i;
-            if (sel)      ld->AddRectFilled(a, b, IM_COL32(34, 196, 186, 70));
-            else if (hov) ld->AddRectFilled(a, b, IM_COL32(255, 255, 255, 12));
-            ld->AddLine({a.x, b.y - 0.5f}, {b.x, b.y - 0.5f}, IM_COL32(255, 255, 255, 14));
+            if (sel)      ld->AddRectFilled(a, b, TC(34, 196, 186, 70));
+            else if (hov) ld->AddRectFilled(a, b, TC(255, 255, 255, 12));
+            ld->AddLine({a.x, b.y - 0.5f}, {b.x, b.y - 0.5f}, TC(255, 255, 255, 14));
 
             const float ty = a.y + (rowH - ImGui::GetTextLineHeight()) * 0.5f - 2;
             if (e.current) iconPlay(ld, {a.x + 22, a.y + rowH * 0.5f - 2}, 11, white);
             const double dur = i < int(pl.durations.size()) ? pl.durations[size_t(i)] : -1;
             const std::string d = dur > 0 ? clockText(dur) : "";
             const ImVec2 ds = ImGui::CalcTextSize(d.c_str());
-            ld->AddText({b.x - 16 - ds.x, ty}, IM_COL32(255, 255, 255, 130), d.c_str());
+            ld->AddText({b.x - 16 - ds.x, ty}, TC(255, 255, 255, 130), d.c_str());
             const std::string name = displayName(e);
             ld->PushClipRect({a.x + 40, a.y}, {b.x - 26 - ds.x, b.y}, true);
-            ld->AddText({a.x + 40, ty}, IM_COL32(255, 255, 255, e.current ? 255 : 220), name.c_str());
+            ld->AddText({a.x + 40, ty}, TC(255, 255, 255, e.current ? 255 : 220), name.c_str());
             ld->PopClipRect();
 
             // watched so far (IINA draws it under the row)
             const float prog = i < int(pl.progress.size()) ? pl.progress[size_t(i)] : 0.0f;
             if (prog > 0.0f)
-                ld->AddRectFilled({a.x, b.y - 3}, {a.x + rw * std::min(prog, 1.0f), b.y - 1}, IM_COL32(34, 196, 186, 255));
+                ld->AddRectFilled({a.x, b.y - 3}, {a.x + rw * std::min(prog, 1.0f), b.y - 1}, TC(34, 196, 186, 255));
 
             // where a dragged row would land
             if (m_dragFrom >= 0) {
@@ -2186,7 +2331,7 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
             if (dropAt < 0) dropAt = my < ImGui::GetWindowPos().y + 4 ? 0 : n;
             const float ly = ImGui::GetWindowPos().y + dropAt * rowH - ImGui::GetScrollY();
             ld->AddLine({ImGui::GetWindowPos().x + 8, ly}, {ImGui::GetWindowPos().x + rw - 8, ly},
-                        IM_COL32(34, 196, 186, 255), 2.0f);
+                        TC(34, 196, 186, 255), 2.0f);
             if (!ImGui::IsMouseDown(0)) {
                 if (dropAt != m_dragFrom && dropAt != m_dragFrom + 1) {
                     out.playlistMoveFrom = m_dragFrom;
@@ -2198,7 +2343,7 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
         }
         if (n == 0) {
             ImGui::SetCursorPos({20, 20});
-            ImGui::TextDisabled("Drop videos here or press + to add them.");
+            ImGui::TextDisabled("%s", T("Drop videos here or press + to add them."));
         }
     } else {
         for (int i = 0; i < int(st.chapters.size()); ++i) {
@@ -2209,60 +2354,60 @@ void Overlay::drawPlaylist(const PlayerState& st, const PlaylistView& pl, Overla
             if (ImGui::InvisibleButton("##ch", {rw, rowH})) out.seekChapter = i;
             const bool hov = ImGui::IsItemHovered();
             ImGui::PopID();
-            if (hov) ld->AddRectFilled(a, b, IM_COL32(255, 255, 255, 12));
-            ld->AddLine({a.x, b.y - 0.5f}, {b.x, b.y - 0.5f}, IM_COL32(255, 255, 255, 14));
+            if (hov) ld->AddRectFilled(a, b, TC(255, 255, 255, 12));
+            ld->AddLine({a.x, b.y - 0.5f}, {b.x, b.y - 0.5f}, TC(255, 255, 255, 14));
             const float ty = a.y + (rowH - ImGui::GetTextLineHeight()) * 0.5f;
             if (i == st.chapter) iconPlay(ld, {a.x + 22, a.y + rowH * 0.5f}, 11, white);
             const std::string t = clockText(c.time);
             const ImVec2 ts = ImGui::CalcTextSize(t.c_str());
-            ld->AddText({b.x - 16 - ts.x, ty}, IM_COL32(255, 255, 255, 130), t.c_str());
+            ld->AddText({b.x - 16 - ts.x, ty}, TC(255, 255, 255, 130), t.c_str());
             ld->PushClipRect({a.x + 40, a.y}, {b.x - 26 - ts.x, b.y}, true);
-            ld->AddText({a.x + 40, ty}, IM_COL32(255, 255, 255, 230), c.title.c_str());
+            ld->AddText({a.x + 40, ty}, TC(255, 255, 255, 230), c.title.c_str());
             ld->PopClipRect();
         }
         if (st.chapters.empty()) {
             ImGui::SetCursorPos({20, 20});
-            ImGui::TextDisabled("This video has no chapters.");
+            ImGui::TextDisabled("%s", T("This video has no chapters."));
         }
     }
     ImGui::EndChild();
 
     // ---- footer: repeat, shuffle, sort | total | add, remove, clear
     const float fy = size.y - footerH * 0.5f;
-    dl->AddLine({x, size.y - footerH}, {x + w, size.y - footerH}, IM_COL32(255, 255, 255, 20));
+    dl->AddLine({x, size.y - footerH}, {x + w, size.y - footerH}, TC(255, 255, 255, 20));
     if (footerButton("##repeat", {x + 30, fy}, st.loopFile || st.loopPlaylist,
                      st.loopFile ? +[](ImDrawList* d, ImVec2 c, ImU32 col) { iconRepeat(d, c, col, true); }
                                  : +[](ImDrawList* d, ImVec2 c, ImU32 col) { iconRepeat(d, c, col, false); }))
         out.cycleRepeat = true;
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", st.loopFile ? "Repeat: this video" : st.loopPlaylist ? "Repeat: playlist" : "Repeat: off");
+        ImGui::SetTooltip("%s", st.loopFile ? T("Repeat: this video") : st.loopPlaylist ? T("Repeat: playlist") : T("Repeat: off"));
     if (footerButton("##shuffle", {x + 62, fy}, st.shuffled, iconShuffle)) out.toggleShuffle = true;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Shuffle");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Shuffle"));
     if (footerButton("##sort", {x + 94, fy}, false, iconSort)) out.playlistSort = true;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Sort by name");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Sort by name"));
 
     double total = 0;
     for (size_t i = 0; i < st.playlist.size() && i < pl.durations.size(); ++i)
         if (pl.durations[i] > 0) total += pl.durations[i];
-    const std::string tt = total > 0 && w >= 360 ? clockText(total) + " in total" : "";
+    const std::string tt = total > 0 && w >= 360 ? TF("{} in total", {clockText(total)}) : "";
     const ImVec2 ts = ImGui::CalcTextSize(tt.c_str());
-    dl->AddText({x + w * 0.5f - ts.x * 0.5f + 20, fy - ts.y * 0.5f}, IM_COL32(255, 255, 255, 130), tt.c_str());
+    dl->AddText({x + w * 0.5f - ts.x * 0.5f + 20, fy - ts.y * 0.5f}, TC(255, 255, 255, 130), tt.c_str());
 
     if (footerButton("##add", {x + w - 94, fy}, false, [](ImDrawList* d, ImVec2 c, ImU32 col) {
             d->AddLine({c.x - 7, c.y}, {c.x + 7, c.y}, col, 1.6f);
             d->AddLine({c.x, c.y - 7}, {c.x, c.y + 7}, col, 1.6f);
         }))
         out.playlistAdd = true;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add files...");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Add files..."));
     if (footerButton("##remove", {x + w - 62, fy}, false, [](ImDrawList* d, ImVec2 c, ImU32 col) {
             d->AddLine({c.x - 7, c.y}, {c.x + 7, c.y}, col, 1.6f);
         }) && m_playlistSelected >= 0 && m_playlistSelected < int(st.playlist.size())) {
         out.playlistRemove = m_playlistSelected;
         m_playlistSelected = -1;
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove selected");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Remove selected"));
     if (footerButton("##clear", {x + w - 30, fy}, false, iconTrash)) out.playlistClear = true;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Clear playlist (keeps the playing video)");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Clear playlist (keeps the playing video)"));
 
     ImGui::End();
 }
@@ -2289,7 +2434,8 @@ std::string prettyDate(const std::string& iso) {
     const int y = std::atoi(iso.substr(0, 4).c_str()), m = std::atoi(iso.substr(5, 2).c_str()),
               d = std::atoi(iso.substr(8, 2).c_str());
     if (m < 1 || m > 12) return iso;
-    return std::to_string(d) + " " + months[m - 1] + " " + std::to_string(y);
+    // day, month, year; a language can reorder them ("{2}年{1}{0}日")
+    return TF("{0} {1} {2}", {std::to_string(d), T(months[m - 1]), std::to_string(y)});
 }
 
 // Upper-case text button (dialog footer); returns true when clicked.
@@ -2302,7 +2448,7 @@ bool textButton(const char* label, ImVec2 rightEdge, ImU32 color, bool enabled, 
     const bool clicked = ImGui::InvisibleButton("##tb", {ts.x + 12, ts.y + 12}) && enabled;
     const bool hov = ImGui::IsItemHovered() && enabled;
     ImGui::PopID();
-    const ImU32 c = enabled ? (hov ? IM_COL32(255, 255, 255, 255) : color) : IM_COL32(255, 255, 255, 70);
+    const ImU32 c = enabled ? (hov ? TC(255, 255, 255, 255) : color) : TC(255, 255, 255, 70);
     ImGui::GetWindowDrawList()->AddText(pos, c, label);
     if (hov) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     return clicked;
@@ -2322,8 +2468,8 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
 
     ImGui::SetNextWindowPos(pos);
     ImGui::SetNextWindowSize({w, h});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.14f, 0.17f, 0.97f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1, 1, 1, 0.12f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0.13f, 0.14f, 0.17f, 0.97f));
+    ImGui::PushStyleColor(ImGuiCol_Border, TV(1, 1, 1, 0.12f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {26, 20});
@@ -2342,27 +2488,27 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
 
     // ---- title + hint
     ImVec2 p = ImGui::GetCursorScreenPos();
-    const std::string title = searching ? "Searching..." : (st && !st->message.empty() && !downloading && hasResults)
+    const std::string title = searching ? T("Searching...") : (st && !st->message.empty() && !downloading && hasResults)
                                                               ? st->message
-                                                          : (st && !st->results.empty()) ? std::to_string(st->results.size()) + " subtitles found."
+                                                          : (st && !st->results.empty()) ? TF("{} subtitles found.", {std::to_string(st->results.size())})
                                                           : (st ? st->message : std::string());
-    dl->AddText(ImGui::GetFont(), 24.0f, p, st && st->error ? IM_COL32(255, 140, 128, 255) : IM_COL32(255, 255, 255, 245),
+    dl->AddText(ImGui::GetFont(), 24.0f, p, st && st->error ? TC(255, 140, 128, 255) : TC(255, 255, 255, 245),
                 title.c_str());
     if (hasResults)
-        dl->AddText(ImGui::GetFont(), 15.0f, {p.x, p.y + 32}, IM_COL32(255, 255, 255, 110),
-                    downloading ? "Downloading the selected subtitle..." : "Please click to select subtitles to download:");
+        dl->AddText(ImGui::GetFont(), 15.0f, {p.x, p.y + 32}, TC(255, 255, 255, 110),
+                    downloading ? T("Downloading the selected subtitle...") : T("Please click to select subtitles to download:"));
     ImGui::SetCursorScreenPos({p.x, p.y + 58});
 
     // ---- refine: title + languages + search (in case the file name guess is off)
-    const float searchW = ImGui::CalcTextSize("Search").x + 40;
+    const float searchW = ImGui::CalcTextSize(T("Search")).x + 40;
     const float langW = 110.0f;
-    bool go = textField("##q", m_queryBuf, sizeof m_queryBuf, inner - langW - searchW - 20, 0, "Movie or episode name");
+    bool go = textField("##q", m_queryBuf, sizeof m_queryBuf, inner - langW - searchW - 20, 0, T("Movie or episode name"));
     ImGui::SameLine(0, 10);
     go |= textField("##l", m_langBuf, sizeof m_langBuf, langW, 0, "tr,en");
     ImGui::SameLine(0, 10);
     const ImVec2 sp = ImGui::GetCursorScreenPos();
     ImGui::BeginDisabled(searching || downloading);
-    go |= pillButton("Search", sp, 35.0f);
+    go |= pillButton(T("Search"), sp, 35.0f);
     ImGui::EndDisabled();
     if (go && !searching && !downloading) {
         out.onlineSearch = true;
@@ -2375,7 +2521,7 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
     // ---- results
     const float footerH = 44.0f;
     const float listH = std::max(80.0f, ImGui::GetContentRegionAvail().y - footerH);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(1, 1, 1, 0.05f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, TV(1, 1, 1, 0.05f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 6});
     ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 6.0f);
@@ -2399,13 +2545,13 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
             }
             ImGui::PopID();
             const bool sel = m_selectedResult == int(i);
-            if (sel)      ld->AddRectFilled({a.x + 6, a.y}, {b.x - 6, b.y}, IM_COL32(34, 196, 186, 90), 8.0f);
-            else if (hov) ld->AddRectFilled({a.x + 6, a.y}, {b.x - 6, b.y}, IM_COL32(255, 255, 255, 12), 8.0f);
+            if (sel)      ld->AddRectFilled({a.x + 6, a.y}, {b.x - 6, b.y}, TC(34, 196, 186, 90), 8.0f);
+            else if (hov) ld->AddRectFilled({a.x + 6, a.y}, {b.x - 6, b.y}, TC(255, 255, 255, 12), 8.0f);
 
             // line 1 (small, grey): language (year) fps  [down-arrow] downloads ... date
             float x = a.x + 24;
             const float y1 = a.y + 12;
-            const ImU32 grey = IM_COL32(255, 255, 255, 150);
+            const ImU32 grey = TC(255, 255, 255, 150);
             auto small = [&](const std::string& t) {
                 ld->AddText(ImGui::GetFont(), 14.0f, {x, y1}, grey, t.c_str());
                 x += ImGui::GetFont()->CalcTextSizeA(14.0f, FLT_MAX, 0, t.c_str()).x + 12;
@@ -2423,24 +2569,24 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
             x += 11;
             small(std::to_string(r.downloads));
             if (r.hashMatch) {
-                const ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(13.0f, FLT_MAX, 0, "Exact match");
-                ld->AddRectFilled({x, y1 - 1}, {x + ts.x + 10, y1 + 16}, IM_COL32(52, 168, 83, 210), 4.0f);
-                ld->AddText(ImGui::GetFont(), 13.0f, {x + 5, y1}, IM_COL32(255, 255, 255, 255), "Exact match");
+                const ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(13.0f, FLT_MAX, 0, T("Exact match"));
+                ld->AddRectFilled({x, y1 - 1}, {x + ts.x + 10, y1 + 16}, TC(52, 168, 83, 210), 4.0f);
+                ld->AddText(ImGui::GetFont(), 13.0f, {x + 5, y1}, TC(255, 255, 255, 255), T("Exact match"));
                 x += ts.x + 18;
             }
             if (r.hearingImpaired) small("HI");
-            const std::string date = st->downloadingId == r.fileId ? "Downloading..." : prettyDate(r.uploadDate);
+            const std::string date = st->downloadingId == r.fileId ? T("Downloading...") : prettyDate(r.uploadDate);
             const float dw = ImGui::GetFont()->CalcTextSizeA(14.0f, FLT_MAX, 0, date.c_str()).x;
-            ld->AddText(ImGui::GetFont(), 14.0f, {b.x - 24 - dw, y1}, IM_COL32(255, 255, 255, 110), date.c_str());
+            ld->AddText(ImGui::GetFont(), 14.0f, {b.x - 24 - dw, y1}, TC(255, 255, 255, 110), date.c_str());
 
             // line 2: release name
             ld->PushClipRect({a.x + 20, a.y}, {b.x - 20, b.y}, true);
-            ld->AddText(ImGui::GetFont(), 17.0f, {a.x + 24, a.y + 34}, IM_COL32(255, 255, 255, 245), r.release.c_str());
+            ld->AddText(ImGui::GetFont(), 17.0f, {a.x + 24, a.y + 34}, TC(255, 255, 255, 245), r.release.c_str());
             ld->PopClipRect();
         }
     } else if (!searching && st && !st->message.empty() && !st->error) {
         ImGui::SetCursorPos({24, 16});
-        ImGui::TextDisabled("Try another title or language.");
+        ImGui::TextDisabled("%s", T("Try another title or language."));
     }
     ImGui::EndChild();
 
@@ -2448,20 +2594,89 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
     const ImVec2 f{p.x, ImGui::GetCursorScreenPos().y + 14};
     float tw = 0;
     const bool canDownload = m_selectedResult >= 0 && hasResults && !downloading && !searching;
-    if (textButton(downloading ? "DOWNLOADING..." : "DOWNLOAD", {f.x + inner, f.y}, IM_COL32(110, 165, 255, 255),
+    if (textButton(downloading ? T("DOWNLOADING...") : T("DOWNLOAD"), {f.x + inner, f.y}, TC(110, 165, 255, 255),
                    canDownload, &tw))
         out.onlineDownload = m_selectedResult;
     float cw = 0;
-    if (textButton("CANCEL", {f.x + inner - tw - 28, f.y}, IM_COL32(255, 255, 255, 190), true, &cw) ||
+    if (textButton(T("CANCEL"), {f.x + inner - tw - 28, f.y}, TC(255, 255, 255, 190), true, &cw) ||
         ImGui::IsKeyPressed(ImGuiKey_Escape))
         m_resultsOpen = false;
     ImGui::SetCursorScreenPos({f.x - 6, f.y - 6});
-    if (ImGui::InvisibleButton("##acct", {ImGui::CalcTextSize("Account...").x + 12, 30})) openAccountForm(online);
-    dl->AddText({f.x, f.y}, IM_COL32(255, 255, 255, ImGui::IsItemHovered() ? 220 : 120), "Account...");
+    if (ImGui::InvisibleButton("##acct", {ImGui::CalcTextSize(T("Account...")).x + 12, 30})) openAccountForm(online);
+    dl->AddText({f.x, f.y}, TC(255, 255, 255, ImGui::IsItemHovered() ? 220 : 120), T("Account..."));
     ImGui::End();
 }
 
 float Overlay::panelWidth(float displayW) { return std::min(420.0f, std::max(300.0f, displayW * 0.42f)); }
+
+
+// The settings that are not about the video playing: the language and the default player.
+void Overlay::drawGeneralTab(float inner, OverlayActions& out) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    // ---- language: the system's, or one of ours (each in its own name)
+    sectionHeader(nullptr, T("Language"), inner, nullptr);
+    {
+        const auto& langs = i18n::languages();
+        const std::string& chosen = i18n::choice();
+        std::string current = "English";
+        for (const auto& l : langs) if (l.code == i18n::language()) current = l.name;
+        std::vector<std::string> labels{chosen.empty() ? TF("System language ({})", {current})
+                                                       : std::string(T("System language"))};
+        int selected = 0;
+        for (size_t i = 0; i < langs.size(); ++i) {
+            labels.push_back(langs[i].name);
+            if (!chosen.empty() && langs[i].code == chosen) selected = int(i) + 1;
+        }
+        int picked = -1;
+        if (choiceList("##language", labels, selected, inner, picked) && picked != selected)
+            i18n::choose(picked == 0 ? std::string() : langs[size_t(picked - 1)].code);
+    }
+    ImGui::Dummy({0, 18});
+
+    // ---- appearance: dark, light or the system's
+    sectionHeader(nullptr, T("Appearance"), inner, nullptr);
+    {
+        const std::vector<std::string> labels{T("System"), T("Dark"), T("Light")};
+        const Theme themes[] = {Theme::System, Theme::Dark, Theme::Light};
+        int selected = 0;
+        for (int i = 0; i < 3; ++i) if (themes[i] == m_theme) selected = i;
+        int picked = -1;
+        if (choiceList("##appearance", labels, selected, inner, picked) && picked != selected) setTheme(themes[picked]);
+    }
+    ImGui::Dummy({0, 18});
+
+    // ---- default player: where double-clicking a video goes
+    if (m_defaultAvailable) {
+        sectionHeader(nullptr, T("Default Player"), inner, nullptr);
+        const std::string text = !m_defaultNote.empty() ? m_defaultNote
+                               : m_offerDefault ? std::string(T("Double-clicking a video opens it in another app."))
+                                                : std::string(T("Double-clicking a video opens Tolga Player."));
+        const float wrap = inner - 36.0f;
+        ImFont* font = ImGui::GetFont();
+        const ImVec2 ts = font->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, wrap, text.c_str());
+        const float btnH = 32.0f;
+        const float h = 16 + ts.y + (m_offerDefault ? 14 + btnH : 0) + 16;
+        const ImVec2 p = card(inner, h);
+        dl->AddText(font, ImGui::GetFontSize(), {p.x + 18, p.y + 16}, TC(255, 255, 255, 200), text.c_str(),
+                    nullptr, wrap);
+        if (m_offerDefault) {
+            ImGui::SetCursorScreenPos({p.x + 18, p.y + 16 + ts.y + 14});
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {14, 7});
+            ImGui::PushStyleColor(ImGuiCol_Button, TV(0.07f, 0.62f, 0.60f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, TV(0.11f, 0.70f, 0.67f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, TV(0.05f, 0.52f, 0.51f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));  // white on turquoise in both themes
+            if (ImGui::Button(T("Make Default"), {0, btnH})) out.makeDefaultPlayer = true;
+            ImGui::PopStyleColor(4);
+            ImGui::PopStyleVar(2);
+        }
+        ImGui::SetCursorScreenPos({p.x, p.y + h});
+        ImGui::Dummy({inner, 0});
+        ImGui::Dummy({0, 24});
+    }
+}
 
 void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, const OnlineView& online,
                             OverlayActions& out) {
@@ -2472,7 +2687,7 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
 
     ImGui::SetNextWindowPos({x, 0});
     ImGui::SetNextWindowSize({w, size.y});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.14f, 0.99f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, TV(0.12f, 0.12f, 0.14f, 0.99f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20, 18 + topInset()});
     ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 6.0f);
@@ -2485,7 +2700,7 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
     if (hovered) m_hoveringPanel = true;
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddLine({x, 0}, {x, size.y}, IM_COL32(255, 255, 255, 26));
+    dl->AddLine({x, 0}, {x, size.y}, TC(255, 255, 255, 26));
     const float inner = w - 40.0f;
     const ImVec2 top = ImGui::GetCursorScreenPos();
 
@@ -2493,9 +2708,9 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
     const ImVec2 closeC{top.x + 18, top.y + 18};
     ImGui::SetCursorScreenPos({closeC.x - 18, closeC.y - 18});
     if (ImGui::InvisibleButton("##close", {36, 36})) m_panelOpen = false;
-    dl->AddCircleFilled(closeC, 18, IM_COL32(255, 255, 255, ImGui::IsItemHovered() ? 36 : 22), 32);
-    dl->AddLine({closeC.x - 3, closeC.y - 6}, {closeC.x + 3, closeC.y}, IM_COL32(255, 255, 255, 230), 2.0f);
-    dl->AddLine({closeC.x + 3, closeC.y}, {closeC.x - 3, closeC.y + 6}, IM_COL32(255, 255, 255, 230), 2.0f);
+    dl->AddCircleFilled(closeC, 18, TC(255, 255, 255, ImGui::IsItemHovered() ? 36 : 22), 32);
+    dl->AddLine({closeC.x - 3, closeC.y - 6}, {closeC.x + 3, closeC.y}, TC(255, 255, 255, 230), 2.0f);
+    dl->AddLine({closeC.x + 3, closeC.y}, {closeC.x - 3, closeC.y + 6}, TC(255, 255, 255, 230), 2.0f);
 #ifndef __APPLE__
     // About Tolga Player (macOS has it in the app menu)
     {
@@ -2503,35 +2718,50 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
         ImGui::SetCursorScreenPos({c.x - 18, c.y - 18});
         if (ImGui::InvisibleButton("##about", {36, 36})) openAbout();
         const bool hov = ImGui::IsItemHovered();
-        dl->AddCircleFilled(c, 18, IM_COL32(255, 255, 255, hov ? 36 : 22), 32);
-        dl->AddCircleFilled({c.x, c.y - 6.0f}, 1.8f, IM_COL32(255, 255, 255, 230), 12);
-        dl->AddLine({c.x, c.y - 1.5f}, {c.x, c.y + 7.0f}, IM_COL32(255, 255, 255, 230), 2.2f);
+        dl->AddCircleFilled(c, 18, TC(255, 255, 255, hov ? 36 : 22), 32);
+        dl->AddCircleFilled({c.x, c.y - 6.0f}, 1.8f, TC(255, 255, 255, 230), 12);
+        dl->AddLine({c.x, c.y - 1.5f}, {c.x, c.y + 7.0f}, TC(255, 255, 255, 230), 2.2f);
     }
 #endif
 
     struct Tab { PanelTab tab; const char* label; };
-    const Tab tabs[] = {{PanelTab::Video, "Video"}, {PanelTab::Audio, "Audio"}, {PanelTab::Subtitles, "Subtitles"}};
-    float tabsW = 8;
-    for (const Tab& t : tabs) tabsW += (t.tab == m_panelTab ? 44 + ImGui::CalcTextSize(t.label).x + 8 : 44);
+    const Tab tabs[] = {{PanelTab::Video, T("Video")}, {PanelTab::Audio, T("Audio")}, {PanelTab::Subtitles, T("Subtitles")},
+                         {PanelTab::General, T("General")}};
+    // In a narrow panel the tabs give up the selected one's label, then get narrower, so
+    // they stay clear of the buttons on the left.
+#ifdef __APPLE__
+    const float leftEnd = closeC.x + 18 + 10;
+#else
+    const float leftEnd = closeC.x + 44 + 18 + 10;
+#endif
+    const float avail = top.x + inner - leftEnd;
+    const float selLabelW = ImGui::CalcTextSize(
+        std::find_if(std::begin(tabs), std::end(tabs), [&](const Tab& t) { return t.tab == m_panelTab; })->label).x + 8;
+    const float n = float(std::size(tabs));
+    const bool withLabel = 8 + n * 44 + selLabelW <= avail;
+    const float tabW = withLabel || 8 + n * 44 <= avail ? 44.0f : 36.0f;
+    const float tabsW = 8 + n * tabW + (withLabel ? selLabelW : 0.0f);
     float tx = top.x + inner - tabsW;
     const ImVec2 t0{tx, top.y}, t1{tx + tabsW, top.y + 36};
-    dl->AddRectFilled(t0, t1, IM_COL32(255, 255, 255, 18), 18.0f);
+    dl->AddRectFilled(t0, t1, TC(255, 255, 255, 18), 18.0f);
     tx += 4;
     for (const Tab& t : tabs) {
         const bool sel = t.tab == m_panelTab;
-        const float tw = sel ? 44 + ImGui::CalcTextSize(t.label).x + 8 : 44;
+        const float tw = sel && withLabel ? tabW + selLabelW : tabW;
         ImGui::SetCursorScreenPos({tx, top.y + 4});
         ImGui::PushID(t.label);
         if (ImGui::InvisibleButton("##tab", {tw, 28})) m_panelTab = t.tab;
         const bool hov = ImGui::IsItemHovered();
         ImGui::PopID();
-        if (sel || hov) dl->AddRectFilled({tx, top.y + 4}, {tx + tw, top.y + 32}, IM_COL32(255, 255, 255, sel ? 34 : 16), 14.0f);
-        const ImVec2 ic{tx + 22, top.y + 18};
-        const ImU32 c = IM_COL32(255, 255, 255, 235);
+        if (sel || hov) dl->AddRectFilled({tx, top.y + 4}, {tx + tw, top.y + 32}, TC(255, 255, 255, sel ? 34 : 16), 14.0f);
+        const ImVec2 ic{tx + tabW * 0.5f, top.y + 18};
+        const ImU32 c = TC(255, 255, 255, 235);
         if (t.tab == PanelTab::Video)      iconPicture(dl, ic, c);
         else if (t.tab == PanelTab::Audio) iconWaveform(dl, ic, c);
+        else if (t.tab == PanelTab::General) iconGear(dl, ic, 15.0f, c, false);
         else                               iconBubble(dl, ic, c);
-        if (sel) dl->AddText({tx + 38, top.y + 18 - ImGui::GetTextLineHeight() * 0.5f}, c, t.label);
+        if (sel && withLabel) dl->AddText({tx + 38, top.y + 18 - ImGui::GetTextLineHeight() * 0.5f}, c, t.label);
+        if (!(sel && withLabel) && hov) ImGui::SetTooltip("%s", t.label);
         tx += tw;
     }
     ImGui::SetCursorScreenPos({top.x, top.y + 58});
@@ -2559,22 +2789,24 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
         ImGui::EndDisabled();
         if (!off) return;
         const ImVec2 b{a.x + inner, ImGui::GetCursorScreenPos().y};
-        dl->AddRectFilled(a, b, IM_COL32(30, 30, 35, 190), 10.0f);
+        dl->AddRectFilled(a, b, TC(30, 30, 35, 190), 10.0f);
         const std::string text = note;
         const ImVec2 ts = ImGui::CalcTextSize(text.c_str(), nullptr, false, inner - 40);
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), {a.x + (inner - ts.x) * 0.5f, (a.y + b.y - ts.y) * 0.5f},
-                    IM_COL32(255, 255, 255, 200), text.c_str(), nullptr, inner - 40);
+                    TC(255, 255, 255, 200), text.c_str(), nullptr, inner - 40);
     };
-    const std::string notOnTv = "Not available while playing on " + tvName;
+    const std::string notOnTv = TF("Not available while playing on {}", {tvName});
 
-    if (m_panelTab == PanelTab::Subtitles && m_accountOpen) {
+    if (m_panelTab == PanelTab::General) {
+        drawGeneralTab(inner, out);
+    } else if (m_panelTab == PanelTab::Subtitles && m_accountOpen) {
         drawAccountForm(online, inner, out);
     } else if (m_panelTab == PanelTab::Subtitles) {
         const bool subsOff = casting && !castHls;  // the TV got the plain file: no subtitles there
-        const std::string subsNote = "Load a subtitle file or search online to show subtitles on " + tvName;
+        const std::string subsNote = TF("Load a subtitle file or search online to show subtitles on {}", {tvName});
         section(subsOff, subsNote.c_str(), [&] {
             bool visibleOn = st.subVisible;
-            if (sectionHeader(nullptr, "Subtitle Track", inner, &visibleOn)) {
+            if (sectionHeader(nullptr, T("Subtitle Track"), inner, &visibleOn)) {
                 out.setSubVisible = true;
                 out.subVisible = !st.subVisible;
             }
@@ -2587,14 +2819,14 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
         });
         if (castHls) {
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + inner);
-            ImGui::TextDisabled("Changes reach %s after a short pause.", tvName.c_str());
+            ImGui::TextDisabled("%s", TF("Changes reach {} after a short pause.", {tvName}).c_str());
             ImGui::PopTextWrapPos();
         }
         ImGui::Dummy({0, 18});
         const ImVec2 bp = ImGui::GetCursorScreenPos();
-        if (pillButton("Load Subtitle...", bp)) out.loadSubFile = true;
-        const float loadW = ImGui::CalcTextSize("Load Subtitle...").x + 40 + 10;
-        if (pillButton("Search Online...", {bp.x + loadW, bp.y})) {
+        if (pillButton(T("Load Subtitle..."), bp)) out.loadSubFile = true;
+        const float loadW = ImGui::CalcTextSize(T("Load Subtitle...")).x + 40 + 10;
+        if (pillButton(T("Search Online..."), {bp.x + loadW, bp.y})) {
             if (m_queryFor != online.defaultQuery) {
                 // new file: start with its title and the saved languages
                 m_queryFor = online.defaultQuery;
@@ -2616,7 +2848,7 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
         ImGui::Dummy({0, 40});
     } else if (m_panelTab == PanelTab::Audio) {
         section(casting && !castHls, notOnTv.c_str(), [&] {
-            sectionHeader(nullptr, "Audio Track", inner, nullptr);
+            sectionHeader(nullptr, T("Audio Track"), inner, nullptr);
             if (trackList("##audio", audios, aid, true, inner, picked)) { out.selectAudio = true; out.audioId = picked; }
         });
         ImGui::Dummy({0, 18});
@@ -2629,7 +2861,7 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
         ImGui::Dummy({0, 24});
     } else {
         section(casting, notOnTv.c_str(), [&] {
-            sectionHeader(nullptr, "Video Track", inner, nullptr);
+            sectionHeader(nullptr, T("Video Track"), inner, nullptr);
             if (trackList("##video", videos, vid, true, inner, picked)) { out.selectVideo = true; out.videoId = picked; }
         });
         ImGui::Dummy({0, 18});

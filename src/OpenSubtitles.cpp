@@ -1,5 +1,6 @@
 #include "OpenSubtitles.h"
 #include "Paths.h"
+#include "I18n.h"
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -308,13 +309,13 @@ bool OpenSubtitles::ensureLogin(std::string& error) {
     }
     const Reply r = request("POST", apiBase() + "/login", json{{"username", user}, {"password", pass}}.dump(), false);
     if (!r.error.empty()) {
-        error = "Couldn't reach OpenSubtitles: " + r.error;
+        error = TF("Couldn't reach OpenSubtitles: {}", {r.error});
         return false;
     }
     if (r.code != 200) {
         const std::string msg = apiMessage(r.body);
-        error = r.code == 401 ? "OpenSubtitles login failed: check the user name and password."
-                              : "OpenSubtitles login failed (" + std::to_string(r.code) + ")" +
+        error = r.code == 401 ? std::string(T("OpenSubtitles login failed: check the user name and password."))
+                              : TF("OpenSubtitles login failed ({})", {std::to_string(r.code)}) +
                                     (msg.empty() ? "" : ": " + msg);
         return false;
     }
@@ -325,7 +326,7 @@ bool OpenSubtitles::ensureLogin(std::string& error) {
         const std::string host = j.value("base_url", "");
         if (!host.empty()) m_baseUrl = "https://" + host + "/api/v1";  // VIP accounts get their own host
     } catch (...) {
-        error = "OpenSubtitles login: unexpected answer";
+        error = T("OpenSubtitles login: unexpected answer");
         return false;
     }
     return true;
@@ -337,7 +338,7 @@ void OpenSubtitles::search(const std::string& videoPath, const std::string& quer
     if (!settings().hasApiKey()) {
         setStatus([](OpenSubtitlesStatus& s) {
             s.error = true;
-            s.message = "This build has no OpenSubtitles API key. Add one under Account...";
+            s.message = T("This build has no OpenSubtitles API key. Add one under Account...");
         });
         return;
     }
@@ -346,7 +347,7 @@ void OpenSubtitles::search(const std::string& videoPath, const std::string& quer
         s.searching = true;
         s.error = false;
         s.results.clear();
-        s.message = "Searching...";
+        s.message = T("Searching...");
     });
     post([=] {
         std::string error;
@@ -381,12 +382,12 @@ void OpenSubtitles::search(const std::string& videoPath, const std::string& quer
         std::vector<OnlineSubtitle> results;
         auto run = [&](const std::string& url) -> bool {
             const Reply r = request("GET", url, {}, true);
-            if (!r.error.empty()) { error = "Couldn't reach OpenSubtitles: " + r.error; return false; }
-            if (r.code == 401 || r.code == 403) { error = "OpenSubtitles refused the API key."; return false; }
-            if (r.code == 429) { error = "Too many requests, try again in a few seconds."; return false; }
+            if (!r.error.empty()) { error = TF("Couldn't reach OpenSubtitles: {}", {r.error}); return false; }
+            if (r.code == 401 || r.code == 403) { error = T("OpenSubtitles refused the API key."); return false; }
+            if (r.code == 429) { error = T("Too many requests, try again in a few seconds."); return false; }
             if (r.code != 200) {
                 const std::string msg = apiMessage(r.body);
-                error = "Search failed (" + std::to_string(r.code) + ")" + (msg.empty() ? "" : ": " + msg);
+                error = TF("Search failed ({})", {std::to_string(r.code)}) + (msg.empty() ? "" : ": " + msg);
                 return false;
             }
             try {
@@ -416,7 +417,7 @@ void OpenSubtitles::search(const std::string& videoPath, const std::string& quer
                     }
                 }
             } catch (...) {
-                error = "Search: unexpected answer from OpenSubtitles";
+                error = T("Search: unexpected answer from OpenSubtitles");
                 return false;
             }
             return true;
@@ -442,8 +443,8 @@ void OpenSubtitles::search(const std::string& videoPath, const std::string& quer
             s.results = ok ? results : std::vector<OnlineSubtitle>{};
             ++s.resultsSerial;
             if (!ok) s.message = error;
-            else if (results.empty()) s.message = "No subtitles found.";
-            else s.message = std::to_string(results.size()) + (results.size() == 1 ? " subtitle found." : " subtitles found.");
+            else if (results.empty()) s.message = T("No subtitles found.");
+            else s.message = results.size() == 1 ? std::string(T("1 subtitle found.")) : TF("{} subtitles found.", {std::to_string(results.size())});
         });
     });
 }
@@ -455,7 +456,7 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
         s.busy = true;
         s.error = false;
         s.downloadingId = sub.fileId;
-        s.message = "Downloading...";
+        s.message = T("Downloading...");
     });
     post([=] {
         std::string error;
@@ -474,15 +475,15 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
         if (!ensureLogin(error)) return finish(false, error, {});
 
         const Reply r = request("POST", apiBase() + "/download", json{{"file_id", sub.fileId}}.dump(), true);
-        if (!r.error.empty()) return finish(false, "Couldn't reach OpenSubtitles: " + r.error, {});
+        if (!r.error.empty()) return finish(false, TF("Couldn't reach OpenSubtitles: {}", {r.error}), {});
         if (r.code == 406 || r.code == 429) {
             const std::string msg = apiMessage(r.body);
-            return finish(false, msg.empty() ? "Daily download limit reached. Log in (Account...) for more."
+            return finish(false, msg.empty() ? std::string(T("Daily download limit reached. Log in (Account...) for more."))
                                              : msg, {});
         }
         if (r.code != 200) {
             const std::string msg = apiMessage(r.body);
-            return finish(false, "Download failed (" + std::to_string(r.code) + ")" + (msg.empty() ? "" : ": " + msg), {});
+            return finish(false, TF("Download failed ({})", {std::to_string(r.code)}) + (msg.empty() ? "" : ": " + msg), {});
         }
         std::string link, fileName = sub.fileName, remaining;
         try {
@@ -493,7 +494,7 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
                 remaining = std::to_string(j["remaining"].get<int64_t>());
         } catch (...) {
         }
-        if (link.empty()) return finish(false, "Download failed: no link in the answer", {});
+        if (link.empty()) return finish(false, T("Download failed: no link in the answer"), {});
 
         // the link points at a plain file server; no API headers needed
         std::string data;
@@ -510,7 +511,7 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
         curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &code);
         curl_easy_cleanup(c);
         if (rc != CURLE_OK || code != 200 || data.empty())
-            return finish(false, "Download failed while fetching the file", {});
+            return finish(false, T("Download failed while fetching the file"), {});
 
         std::error_code ec;
         const fs::path dir = utf8Path(m_configDir) / "Subtitles" / std::to_string(sub.fileId);
@@ -518,8 +519,7 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
         if (fileName.empty()) fileName = "subtitle.srt";
         const fs::path out = dir / safeFileName(fileName);
         std::ofstream(out, std::ios::binary | std::ios::trunc) << data;
-        std::string msg = "Added " + fileName;
-        if (!remaining.empty()) msg += " (" + remaining + " downloads left today)";
+        std::string msg = remaining.empty() ? TF("Added {}", {fileName}) : TF("Added {} ({} downloads left today)", {fileName, remaining});
         finish(true, msg, utf8String(out));
     });
 }

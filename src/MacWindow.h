@@ -10,6 +10,7 @@ struct SDL_Window;
 #ifdef __APPLE__
 void macSetupWindow(SDL_Window* window);                 // call again after leaving fullscreen
 void macSetTitlebarAlpha(SDL_Window* window, float alpha);  // 0 = hidden (and not clickable), 1 = shown
+void macSetAppearance(SDL_Window* window, bool light);     // the title bar in Tolga's light or dark look
 // The size of the OpenGL drawable in pixels and its pixels per point, read from the view
 // itself. While the window zooms or goes fullscreen, SDL's window and pixel sizes can come
 // from different moments of the animation; this one always matches what is drawn.
@@ -31,5 +32,6 @@ inline void macBringToFront(SDL_Window*) {}
 inline void macHookAboutMenu(void (*)()) {}
 inline void macSetupWindow(SDL_Window*) {}
 inline void macSetTitlebarAlpha(SDL_Window*, float) {}
+inline void macSetAppearance(SDL_Window*, bool) {}
 inline bool macDrawableSize(SDL_Window*, int*, int*, float*) { return false; }
 #endif

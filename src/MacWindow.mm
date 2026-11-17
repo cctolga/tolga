@@ -1,4 +1,5 @@
 #include "MacWindow.h"
+#include "I18n.h"
 
 #import <Cocoa/Cocoa.h>
 #include <SDL3/SDL.h>
@@ -21,6 +22,14 @@ void macSetupWindow(SDL_Window* window) {
     win.titlebarAppearsTransparent = YES;
     win.titleVisibility = NSWindowTitleVisible;
     win.backgroundColor = [NSColor blackColor];
+}
+
+void macSetAppearance(SDL_Window* window, bool light) {
+    NSWindow* win = nsWindowOf(window);
+    if (!win) return;
+    NSAppearanceName name = light ? NSAppearanceNameAqua : NSAppearanceNameDarkAqua;
+    if (win.appearance && [win.appearance.name isEqualToString:name]) return;
+    win.appearance = [NSAppearance appearanceNamed:name];  // the title and its shade agree with Tolga's
 }
 
 void macSetTitlebarAlpha(SDL_Window* window, float alpha) {
@@ -75,7 +84,7 @@ void macHookAboutMenu(void (*onAbout)()) {
         if (item.action == @selector(orderFrontStandardAboutPanel:)) {
             item.target = target;
             item.action = @selector(showAbout:);
-            item.title = @"About Tolga Player";
+            item.title = [NSString stringWithUTF8String:T("About Tolga Player")];
         }
     }
 }

@@ -160,7 +160,9 @@ public:
     void setRecentFiles(const std::vector<std::string>* recent) { m_recent = recent; }
     // The idle screen offers "Make Tolga Player your default video player" while `offer` is
     // true; `note` (the result of the last attempt) is shown instead when it isn't empty.
-    void setDefaultPlayer(bool offer, const std::string& note) { m_offerDefault = offer; m_defaultNote = note; }
+    void setDefaultPlayer(bool available, bool offer, const std::string& note) {
+        m_defaultAvailable = available; m_offerDefault = offer; m_defaultNote = note;
+    }
     // The drawable the frame is rendered into (pixels) and its pixels per point; the
     // controls are laid out for exactly this size.
     // scale: pixels per window unit (Retina 2); ui: how much bigger the controls are drawn
@@ -170,7 +172,12 @@ public:
     }
 
     // Side panel with video / audio / subtitle tracks (IINA-style), sliding in from the right.
-    enum class PanelTab { Video, Audio, Subtitles };
+    enum class PanelTab { Video, Audio, Subtitles, General };
+    // Whatever the system uses (the default), dark or light; remembered between runs.
+    enum class Theme { System, Dark, Light };
+    Theme theme() const { return m_theme; }
+    void setTheme(Theme theme);
+    bool lightTheme() const;  // the light appearance is in use (after the last draw)
     void togglePanel(PanelTab tab);
     bool panelOpen() const { return m_panelOpen; }
     void togglePlaylist() { m_playlistOpen = !m_playlistOpen; poke(); }
@@ -218,6 +225,7 @@ private:
     void drawPinDialog(const CastStatus& cast, OverlayActions& out);
     void drawLicenseDialog(const AirPlayView& airplay, OverlayActions& out);
     void drawAbout(const AirPlayView& airplay, OverlayActions& out);
+    void drawGeneralTab(float inner, OverlayActions& out);
     void drawToast();
 
     SDL_Window* m_window = nullptr;
@@ -269,6 +277,9 @@ private:
     bool        m_fullscreen = false;
     const Thumbnailer* m_thumbs = nullptr;
     const std::vector<std::string>* m_recent = nullptr;
+    Theme m_theme = Theme::System;
+    void loadTheme();
+    bool m_defaultAvailable = false;
     bool m_offerDefault = false;
     std::string m_defaultNote;
     unsigned    m_thumbTex = 0;       // GL texture with the preview being shown

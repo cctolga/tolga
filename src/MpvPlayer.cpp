@@ -1,4 +1,5 @@
 #include "MpvPlayer.h"
+#include "I18n.h"
 
 #include <cstdio>
 #include <cmath>
@@ -329,8 +330,8 @@ std::string Track::label() const {
     std::string s;
     if (!lang.empty()) s = lang;
     if (!title.empty()) s += (s.empty() ? "" : " - ") + title;
-    if (s.empty()) s = "Track " + std::to_string(id);
-    if (external) s += " (file)";
+    if (s.empty()) s = TF("Track {}", {std::to_string(id)});
+    if (external) s += std::string(" (") + T("file") + ")";
     return s;
 }
 
@@ -362,7 +363,7 @@ void MpvPlayer::readChapters(const mpv_node& list) {
         Chapter c;
         if (const mpv_node* v = mapGet(item, "title"); v && v->format == MPV_FORMAT_STRING) c.title = v->u.string;
         if (const mpv_node* v = mapGet(item, "time"); v && v->format == MPV_FORMAT_DOUBLE) c.time = v->u.double_;
-        if (c.title.empty()) c.title = "Chapter " + std::to_string(i + 1);
+        if (c.title.empty()) c.title = TF("Chapter {}", {std::to_string(i + 1)});
         m_state.chapters.push_back(std::move(c));
     }
 }
