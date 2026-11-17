@@ -5,6 +5,8 @@
 # these builds can be (dynamic linking + license notices, see THIRD_PARTY_NOTICES).
 #
 # Usage:   scripts/build-deps.sh            (macOS: brew install meson ninja nasm pkg-config cmake)
+#          Intel Mac libraries on an Apple Silicon Mac (for the universal app; needs Rosetta:
+#            softwareupdate --install-rosetta):  TOLGA_ARCH=x86_64 scripts/build-deps.sh
 #          Linux (Debian/Ubuntu): apt install meson ninja-build nasm pkg-config cmake libva-dev libdrm-dev
 #            libasound2-dev libpulse-dev
 #            libfontconfig-dev
@@ -38,6 +40,10 @@ case "$OS" in mingw*|msys*|ucrt*|cygwin*) OS=windows ;; esac
 if [ "${TOLGA_TARGET:-}" = windows ] && [ "$OS" != windows ]; then
     OS=windows ARCH=x86_64 CROSS=x86_64-w64-mingw32
 fi
+MAC_CROSS=""   # set when building the other Mac architecture (x86_64 on Apple Silicon)
+if [ "$OS" = darwin ] && [ -n "${TOLGA_ARCH:-}" ] && [ "$TOLGA_ARCH" != "$ARCH" ]; then
+    ARCH="$TOLGA_ARCH" MAC_CROSS=1
+fi
 OUT="${TOLGA_DEPS:-$ROOT/deps/$OS-$ARCH}"
 PREFIX="$OUT/prefix"
 SRC="$ROOT/deps/src"
@@ -56,6 +62,43 @@ if [ "$OS" = darwin ]; then
     export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
     export CFLAGS="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET ${CFLAGS:-}"
     export LDFLAGS="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -Wl,-headerpad_max_install_names ${LDFLAGS:-}"
+    if [ -n "$MAC_CROSS" ]; then
+        # The test programs some configure scripts run are $ARCH binaries: Rosetta runs them.
+        arch -x86_64 /usr/bin/true 2>/dev/null ||
+            { echo "building for $ARCH needs Rosetta: softwareupdate --install-rosetta"; exit 1; }
+        export CFLAGS="-arch $ARCH $CFLAGS" CXXFLAGS="-arch $ARCH ${CXXFLAGS:-}" OBJCFLAGS="-arch $ARCH ${OBJCFLAGS:-}"
+        export LDFLAGS="-arch $ARCH $LDFLAGS"
+        # meson takes the host's flags from the cross file, not from the environment
+        MARGS="'-arch', '$ARCH', '-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET', '-I$PREFIX/include'"
+        MLINK="'-arch', '$ARCH', '-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET', '-Wl,-headerpad_max_install_names', '-L$PREFIX/lib'"
+        cat > "$OUT/cross.meson" <<MESONEOF
+[binaries]
+c = ['clang', '-arch', '$ARCH']
+cpp = ['clang++', '-arch', '$ARCH']
+objc = ['clang', '-arch', '$ARCH']
+objcpp = ['clang++', '-arch', '$ARCH']
+ar = 'ar'
+strip = 'strip'
+pkg-config = 'pkg-config'
+[properties]
+needs_exe_wrapper = false
+pkg_config_libdir = '$PREFIX/lib/pkgconfig'
+[built-in options]
+c_args = [$MARGS]
+cpp_args = [$MARGS]
+objc_args = [$MARGS]
+objcpp_args = [$MARGS]
+c_link_args = [$MLINK]
+cpp_link_args = [$MLINK]
+objc_link_args = [$MLINK]
+objcpp_link_args = [$MLINK]
+[host_machine]
+system = 'darwin'
+cpu_family = '$ARCH'
+cpu = '$ARCH'
+endian = 'little'
+MESONEOF
+    fi
 fi
 if [ "$OS" = windows ]; then
     export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"   # nothing from the build machine
@@ -97,11 +140,12 @@ CMAKEEOF
 fi
 CMAKE_CROSS=()
 [ -n "$CROSS" ] && CMAKE_CROSS=(-DCMAKE_TOOLCHAIN_FILE="$OUT/cross.cmake")
+[ -n "$MAC_CROSS" ] && CMAKE_CROSS=(-DCMAKE_OSX_ARCHITECTURES="$ARCH")
 export CPPFLAGS="-I$PREFIX/include ${CPPFLAGS:-}"
 export LDFLAGS="-L$PREFIX/lib ${LDFLAGS:-}"
 
 MESON_COMMON=(--prefix="$PREFIX" --libdir=lib --buildtype=release -Ddefault_library=shared --wrap-mode=nodownload)
-[ -n "$CROSS" ] && MESON_COMMON+=(--cross-file="$OUT/cross.meson")
+[ -n "$CROSS$MAC_CROSS" ] && MESON_COMMON+=(--cross-file="$OUT/cross.meson")
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 done_mark() { [ -f "$OUT/.done-$1" ]; }
@@ -279,6 +323,9 @@ if ! done_mark ffmpeg; then
                   --extra-cflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
                   --extra-ldflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -Wl,-headerpad_max_install_names"
                   --extra-libs=-liconv)   # iconv lives in libiconv on macOS, not libSystem
+        [ -n "$MAC_CROSS" ] && FF_OPTS+=(--enable-cross-compile --arch="$ARCH" --target-os=darwin
+                                         --cc="clang -arch $ARCH" --cxx="clang++ -arch $ARCH"
+                                         --objcc="clang -arch $ARCH" --pkg-config=pkg-config)
     else
         # VA-API (Intel/AMD), NVDEC (NVIDIA, loaded at run time), TLS from the static OpenSSL above
         FF_OPTS+=(--enable-rpath --enable-vaapi --enable-libdrm --enable-ffnvcodec --enable-nvdec
@@ -347,6 +394,7 @@ if ! done_mark mpv; then
         MPV_OPTS+=(-Dswift-build=enabled -Dmacos-cocoa-cb=disabled -Dmacos-media-player=disabled
                    -Dcocoa=enabled -Dcoreaudio=enabled -Daudiounit=disabled -Dgl-cocoa=enabled
                    -Dvideotoolbox-gl=enabled -Dvideotoolbox-pl=disabled)
+        [ -n "$MAC_CROSS" ] && MPV_OPTS+=(-Dswift-flags="-target $ARCH-apple-macos$MACOSX_DEPLOYMENT_TARGET")
     else
         # The app draws through the libmpv render API (OpenGL from SDL), so mpv needs no window
         # system of its own; mpv's X11 code is GPL anyway. Hardware decoding: NVDEC hands frames

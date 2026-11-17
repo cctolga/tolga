@@ -66,5 +66,17 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           gh release view "$TAG" >/dev/null 2>&1 ||
-            gh release create "$TAG" --title "Tolga Player ${TAG#v}" --notes "Tolga Player ${TAG#v}"
+            gh release create "$TAG" --draft --title "Tolga Player ${TAG#v}" --notes "Tolga Player ${TAG#v}"
           gh release upload "$TAG" dist/Tolga-Player-Win.exe dist/Tolga-Player-Win.zip --clobber
+          # The release stays a draft (so the site's download links never point at missing files)
+          # until every download is attached; whichever job finishes last publishes it.
+          names=$(gh release view "$TAG" --json assets -q '.assets[].name')
+          for f in Tolga-Player-Mac.dmg Tolga-Player-Win.exe Tolga-Player-Win.zip \
+                   Tolga-Player-Linux.AppImage Tolga-Player-Linux.AppImage.zsync; do
+            if ! printf '%s\n' "$names" | grep -qx "$f"; then
+              echo "not publishing yet: $f is missing"
+              exit 0
+            fi
+          done
+          gh release edit "$TAG" --draft=false --latest
+          echo "published $TAG"

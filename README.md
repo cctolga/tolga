@@ -4,7 +4,7 @@ A small, good-looking video player for macOS, Windows and Linux that also sends 
 to an Apple TV over AirPlay (MKV, DTS, every audio language and subtitle).
 libmpv (playback) + SDL3 (window, GL context, file dialog) + Dear ImGui (controls).
 
-**Download:** [Mac (Apple Silicon)](https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Mac.dmg) ·
+**Download:** [Mac (Apple Silicon and Intel)](https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Mac.dmg) ·
 [Windows 10/11](https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Win.exe) ·
 [Linux (AppImage)](https://github.com/cctolga/tolga/releases/latest/download/Tolga-Player-Linux.AppImage) ·
 [website](https://cctolga.github.io/tolga/)

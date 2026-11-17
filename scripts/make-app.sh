@@ -4,6 +4,10 @@
 #   scripts/build-deps.sh                 # once (takes a while)
 #   scripts/make-app.sh                   # -> dist/Tolga Player.app, dist/Tolga-Player-Mac.dmg
 #
+# Universal app (Apple Silicon + Intel): on an Apple Silicon Mac also build the Intel libraries
+# once with  TOLGA_ARCH=x86_64 scripts/build-deps.sh . When deps/darwin-x86_64 exists, the app
+# is built for both and the two are joined into one (lipo). TOLGA_ARCHS="arm64" forces one.
+#
 # AirPlay comes from the closed-source module: built from ../tolga-airplay (or
 # TOLGA_AIRPLAY_DIR) if that folder exists, otherwise the prebuilt library that CMake
 # downloads (cmake/AirPlayPrebuilt.cmake). Without either the app has no AirPlay.
@@ -20,10 +24,15 @@ set -eo pipefail   # (no -u: macOS bash 3.2 treats empty arrays as unset)
 [ "$(uname -s)" = Darwin ] || { echo "make-app.sh runs on macOS"; exit 1; }
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ARCH="$(uname -m)"
-DEPS="${TOLGA_DEPS:-$ROOT/deps/darwin-$ARCH}"
-PREFIX="$DEPS/prefix"
-BUILD="$ROOT/build-release"
+HOST_ARCH="$(uname -m)"
+if [ -n "${TOLGA_ARCHS:-}" ]; then
+    read -r -a ARCHS <<< "$TOLGA_ARCHS"
+else
+    ARCHS=("$HOST_ARCH")
+    for a in arm64 x86_64; do
+        [ "$a" != "$HOST_ARCH" ] && [ -f "$ROOT/deps/darwin-$a/prefix/lib/libmpv.dylib" ] && ARCHS+=("$a")
+    done
+fi
 DIST="$ROOT/dist"
 APP="$DIST/Tolga Player.app"
 BUNDLE_ID="${TOLGA_BUNDLE_ID:-app.tolga.player}"
@@ -41,6 +50,18 @@ fi
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[31merror:\033[0m %s\n' "$*"; exit 1; }
+
+# ---------------------------------------------------------------- build one architecture
+# build_arch <arch> <app path>: compiles Tolga for <arch> and assembles a complete bundle there.
+# Sets DEPS, PREFIX, BUILD, PREBUILT_LIB and HAS_AIRPLAY for that architecture.
+build_arch() {
+ARCH="$1"
+APP="$2"
+DEPS="${TOLGA_DEPS:-$ROOT/deps/darwin-$ARCH}"
+[ ${#ARCHS[@]} -gt 1 ] && DEPS="$ROOT/deps/darwin-$ARCH"
+PREFIX="$DEPS/prefix"
+BUILD="$ROOT/build-release"
+[ "$ARCH" = "$HOST_ARCH" ] || BUILD="$ROOT/build-release-$ARCH"
 
 [ -f "$PREFIX/lib/libmpv.dylib" ] || die "LGPL libraries not found in $PREFIX - run scripts/build-deps.sh first"
 [ -x "$PREFIX/bin/ffmpeg" ] || die "$PREFIX/bin/ffmpeg missing - run scripts/build-deps.sh first"
@@ -178,7 +199,38 @@ for f in "$APP/Contents/MacOS/"* "$FW/"*.dylib; do
         esac
     done
 done
-echo "bundled libraries:"; ls "$FW" | sed 's/^/  /'
+echo "bundled libraries ($ARCH):"; ls "$FW" | sed 's/^/  /'
+}
+
+# ---------------------------------------------------------------- build every architecture, join them
+FINAL_APP="$DIST/Tolga Player.app"
+if [ ${#ARCHS[@]} -eq 1 ]; then
+    build_arch "${ARCHS[0]}" "$FINAL_APP"
+else
+    log "universal app: ${ARCHS[*]}"
+    THIN="$DIST/thin"
+    rm -rf "$THIN"
+    # the last one built is the reference for licenses and notices (all use the same versions)
+    for a in "${ARCHS[@]}"; do build_arch "$a" "$THIN/$a/Tolga Player.app"; done
+    log "join ${ARCHS[*]} (lipo)"
+    rm -rf "$FINAL_APP"
+    cp -R "$THIN/${ARCHS[0]}/Tolga Player.app" "$FINAL_APP"
+    # every architecture must bring the same programs and libraries
+    for a in "${ARCHS[@]}"; do
+        (cd "$THIN/$a/Tolga Player.app/Contents" && ls MacOS Frameworks) > "$THIN/$a.files"
+        cmp -s "$THIN/${ARCHS[0]}.files" "$THIN/$a.files" ||
+            die "${ARCHS[0]} and $a bundle different files: $(diff "$THIN/${ARCHS[0]}.files" "$THIN/$a.files" | tr '\n' ' ')"
+    done
+    for f in "$FINAL_APP/Contents/MacOS/"* "$FINAL_APP/Contents/Frameworks/"*.dylib; do
+        rel="${f#"$FINAL_APP"/}"
+        parts=()
+        for a in "${ARCHS[@]}"; do parts+=("$THIN/$a/Tolga Player.app/$rel"); done
+        lipo -create "${parts[@]}" -output "$f"
+    done
+    lipo -info "$FINAL_APP/Contents/MacOS/Tolga"
+fi
+APP="$FINAL_APP"
+FW="$APP/Contents/Frameworks"
 
 # ---------------------------------------------------------------- 4. license notices
 log "license notices"
@@ -257,6 +309,14 @@ codesign --verify --deep --strict "$APP"
 
 # ---------------------------------------------------------------- 6. smoke test: the bundle starts its own libs
 "$APP/Contents/MacOS/ffmpeg" -hide_banner -version | head -1
+for a in "${ARCHS[@]}"; do
+    [ "$a" = "$HOST_ARCH" ] && continue
+    if arch -"$a" /usr/bin/true 2>/dev/null; then
+        arch -"$a" "$APP/Contents/MacOS/ffmpeg" -hide_banner -version | head -1 | sed "s/^/$a: /"
+    else
+        echo "($a: cannot run here to check it; Rosetta not installed)"
+    fi
+done
 if "$APP/Contents/MacOS/ffmpeg" -hide_banner -buildconf | grep -Eq -- '--enable-(gpl|nonfree)'; then
     die "bundled ffmpeg is a GPL build"
 fi
