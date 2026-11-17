@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Tolga VERSION 0.1.4 LANGUAGES C CXX)
+project(Tolga VERSION 0.1.5 LANGUAGES C CXX)
 if(APPLE)
   enable_language(OBJCXX)   # must come right after project(), before any target (Ninja needs it)
 endif()
@@ -174,7 +174,8 @@ add_executable(tolga
   src/RecentFiles.cpp
   src/MpvPlayer.cpp
   src/Overlay.cpp
-  src/Ffmpeg.cpp)
+  src/Ffmpeg.cpp
+  src/DefaultApp.cpp)
 target_include_directories(tolga PRIVATE ${TOLGA_API_INCLUDE})
 target_link_libraries(tolga PRIVATE imgui PkgConfig::MPV ${_airplay_lib} CURL::libcurl nlohmann_json::nlohmann_json
                       Threads::Threads)
@@ -208,11 +209,12 @@ if(WIN32)
   set_source_files_properties(${CMAKE_BINARY_DIR}/tolga.rc PROPERTIES
     OBJECT_DEPENDS "${TOLGA_RC_DIR}/tolga.ico;${TOLGA_RC_DIR}/tolga.manifest")
   target_link_options(tolga PRIVATE -static-libgcc -static-libstdc++)
+  target_link_libraries(tolga PRIVATE shlwapi)   # AssocQueryString: who opens .mkv
 endif()
 
 if(APPLE)
-  target_sources(tolga PRIVATE src/MacWindow.mm)
-  target_link_libraries(tolga PRIVATE "-framework Cocoa")
+  target_sources(tolga PRIVATE src/MacWindow.mm src/DefaultAppMac.mm)
+  target_link_libraries(tolga PRIVATE "-framework Cocoa" "-framework CoreServices" "-framework UniformTypeIdentifiers")
   target_compile_definitions(tolga PRIVATE GL_SILENCE_DEPRECATION)
   target_compile_definitions(imgui PRIVATE GL_SILENCE_DEPRECATION)
 endif()

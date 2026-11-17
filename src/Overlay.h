@@ -84,6 +84,8 @@ struct OverlayActions {
     bool        selectCastTarget  = false;
     std::string castTarget;                 // device ID, empty = play on this computer
 
+    bool        makeDefaultPlayer = false;  // "Make Tolga Player your default video player"
+
     // licensing (official builds)
     bool        openLicense = false;        // show the license dialog
     bool        closeLicense = false;
@@ -156,6 +158,9 @@ public:
     void setThumbnails(const Thumbnailer* thumbs) { m_thumbs = thumbs; }
     // recently opened files for the idle screen (nullptr / empty = no list)
     void setRecentFiles(const std::vector<std::string>* recent) { m_recent = recent; }
+    // The idle screen offers "Make Tolga Player your default video player" while `offer` is
+    // true; `note` (the result of the last attempt) is shown instead when it isn't empty.
+    void setDefaultPlayer(bool offer, const std::string& note) { m_offerDefault = offer; m_defaultNote = note; }
     // The drawable the frame is rendered into (pixels) and its pixels per point; the
     // controls are laid out for exactly this size.
     // scale: pixels per window unit (Retina 2); ui: how much bigger the controls are drawn
@@ -264,6 +269,8 @@ private:
     bool        m_fullscreen = false;
     const Thumbnailer* m_thumbs = nullptr;
     const std::vector<std::string>* m_recent = nullptr;
+    bool m_offerDefault = false;
+    std::string m_defaultNote;
     unsigned    m_thumbTex = 0;       // GL texture with the preview being shown
     int         m_thumbIndex = -1;    // which preview is in the texture
     std::vector<uint8_t> m_thumbPixels;

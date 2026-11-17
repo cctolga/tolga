@@ -26,6 +26,32 @@
         <string>_raop._tcp</string>
     </array>
 
+    <!-- MKV and WebM have no system type: declare them, so they get stable types that
+         "Make Tolga Player your default video player" can claim (as IINA and VLC do) -->
+    <key>UTImportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>     <string>org.matroska.mkv</string>
+            <key>UTTypeDescription</key>    <string>Matroska Video</string>
+            <key>UTTypeConformsTo</key>     <array><string>public.movie</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key> <array><string>mkv</string></array>
+                <key>public.mime-type</key>          <array><string>video/x-matroska</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>     <string>org.webmproject.webm</string>
+            <key>UTTypeDescription</key>    <string>WebM Video</string>
+            <key>UTTypeConformsTo</key>     <array><string>public.movie</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key> <array><string>webm</string></array>
+                <key>public.mime-type</key>          <array><string>video/webm</string></array>
+            </dict>
+        </dict>
+    </array>
+
     <!-- "Open With > Tolga" for videos and subtitle files -->
     <key>CFBundleDocumentTypes</key>
     <array>

@@ -9,6 +9,8 @@ Unicode true
 !define EXE      "Tolga Player.exe"
 !define PROGID   "TolgaPlayer.Media"
 !define UNINST   "Software\Microsoft\Windows\CurrentVersion\Uninstall\TolgaPlayer"
+; Windows' "Default apps" settings list Tolga Player with these types (the app can open that page)
+!define CAPS     "Software\Tolga Player\Capabilities"
 
 Name "${APP}"
 OutFile "${OUTFILE}"
@@ -60,6 +62,7 @@ VIAddVersionKey "LegalCopyright" "Apache License 2.0"
 !macro AddType _ext
   WriteRegStr HKCU "Software\Classes\${_ext}\OpenWithProgids" "${PROGID}" ""
   WriteRegStr HKCU "Software\Classes\Applications\${EXE}\SupportedTypes" "${_ext}" ""
+  WriteRegStr HKCU "${CAPS}\FileAssociations" "${_ext}" "${PROGID}"
 !macroend
 !macro RemoveType _ext
   DeleteRegValue HKCU "Software\Classes\${_ext}\OpenWithProgids" "${PROGID}"
@@ -81,7 +84,10 @@ Section "Install"
   WriteRegStr HKCU "Software\Classes\${PROGID}\shell\open\command" "" '"$INSTDIR\${EXE}" "%1"'
   WriteRegStr HKCU "Software\Classes\Applications\${EXE}" "FriendlyAppName" "${APP}"
   WriteRegStr HKCU "Software\Classes\Applications\${EXE}\shell\open\command" "" '"$INSTDIR\${EXE}" "%1"'
+  WriteRegStr HKCU "${CAPS}" "ApplicationName" "${APP}"
+  WriteRegStr HKCU "${CAPS}" "ApplicationDescription" "Plays videos and sends them to an Apple TV"
   !insertmacro FileTypes AddType
+  WriteRegStr HKCU "Software\RegisteredApplications" "${APP}" "${CAPS}"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'  ; SHCNE_ASSOCCHANGED
 
   WriteRegStr HKCU "${UNINST}" "DisplayName" "${APP}"
@@ -101,6 +107,8 @@ Section "Uninstall"
   !insertmacro FileTypes RemoveType
   DeleteRegKey HKCU "Software\Classes\${PROGID}"
   DeleteRegKey HKCU "Software\Classes\Applications\${EXE}"
+  DeleteRegValue HKCU "Software\RegisteredApplications" "${APP}"
+  DeleteRegKey HKCU "${CAPS}"   ; only the Capabilities key: the trial record next to it stays
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
   DeleteRegKey HKCU "${UNINST}"
   ; settings, license and recent files in %APPDATA%\Tolga stay, as with other apps

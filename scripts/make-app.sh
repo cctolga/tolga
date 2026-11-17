@@ -228,6 +228,8 @@ else
         lipo -create "${parts[@]}" -output "$f"
     done
     lipo -info "$FINAL_APP/Contents/MacOS/Tolga"
+    # the single-architecture copies are apps too: Spotlight and "Open With" would list them
+    rm -rf "$THIN"
 fi
 APP="$FINAL_APP"
 FW="$APP/Contents/Frameworks"

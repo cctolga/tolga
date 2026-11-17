@@ -853,7 +853,7 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
     // recently opened files under the button, as many as fit
     constexpr float kRowH = 34.0f, kListGap = 36.0f, kHeaderH = 26.0f, kClearH = 40.0f;
     size_t rows = m_recent ? m_recent->size() : 0;
-    const float room = size.y - 230.0f;  // title, hint, button and margins
+    const float room = size.y - 280.0f;  // title, hint, button, margins and the line at the bottom
     while (rows > 0 && kListGap + kHeaderH + rows * kRowH + kClearH > room) --rows;
     const float listH = rows ? kListGap + kHeaderH + rows * kRowH + kClearH : 0.0f;
     const ImVec2 c{size.x * 0.5f, size.y * 0.5f - listH * 0.5f};
@@ -941,6 +941,23 @@ void Overlay::drawIdleScreen(OverlayActions& out) {
         const bool ch = ImGui::IsItemHovered();
         if (ch) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         dl->AddText(font, 14.0f, cpos, IM_COL32(255, 255, 255, ch ? 200 : 100), clearLabel);
+    }
+
+    // at the bottom: "Make Tolga Player your default video player", or what came of it
+    if (!m_defaultNote.empty()) {
+        const float w = std::min(560.0f, size.x - 40.0f);
+        const ImVec2 ns = font->CalcTextSizeA(14.0f, FLT_MAX, w, m_defaultNote.c_str());
+        dl->AddText(font, 14.0f, {c.x - ns.x * 0.5f, size.y - 26 - ns.y}, IM_COL32(255, 255, 255, 140),
+                    m_defaultNote.c_str(), nullptr, w);
+    } else if (m_offerDefault) {
+        const char* label = "Make Tolga Player your default video player";
+        const ImVec2 ds = font->CalcTextSizeA(14.0f, FLT_MAX, 0, label);
+        const ImVec2 dpos{c.x - ds.x * 0.5f, size.y - 26 - ds.y};
+        ImGui::SetCursorScreenPos({dpos.x - 8, dpos.y - 5});
+        if (ImGui::InvisibleButton("##makeDefault", {ds.x + 16, ds.y + 10})) out.makeDefaultPlayer = true;
+        const bool dh = ImGui::IsItemHovered();
+        if (dh) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        dl->AddText(font, 14.0f, dpos, IM_COL32(255, 255, 255, dh ? 210 : 105), label);
     }
     ImGui::End();
 }

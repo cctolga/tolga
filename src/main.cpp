@@ -8,6 +8,7 @@
 #include "Thumbnailer.h"
 #include "RecentFiles.h"
 #include "MacWindow.h"
+#include "DefaultApp.h"
 #include "Overlay.h"
 #include "Paths.h"
 
@@ -372,6 +373,9 @@ int main(int argc, char** argv) {
 
     OpenSubtitles online(configDir, pushWake);
     RecentFiles recent(configDir);
+    // "Make Tolga Player your default video player" on the idle screen, until it is
+    bool offerDefault = defaultapp::available() && !defaultapp::isDefault();
+    std::string defaultNote;
     trace("OpenSubtitles ready");
 
     {   // About window: versions, license and third-party notices (from the app bundle)
@@ -563,6 +567,7 @@ int main(int argc, char** argv) {
 #endif
         const Uint64 tfBeforeDraw = SDL_GetTicksNS();
         overlay.setRecentFiles(st.idle ? &recent.existing() : nullptr);
+        overlay.setDefaultPlayer(offerDefault, defaultNote);
         OverlayActions act = overlay.draw(st, fullscreen, apView, onlineView, playlistView);
         tfDraw = SDL_GetTicksNS() - tfBeforeDraw;
         // the title bar buttons fade together with the controls
@@ -659,6 +664,18 @@ int main(int argc, char** argv) {
                     break;
                 case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
                     fullscreen = true;
+                    break;
+                case SDL_EVENT_WINDOW_FOCUS_GAINED:
+                    // The default may have changed meanwhile: in Windows' settings after the
+                    // button, or in Finder / the system settings for another player.
+                    if (player.state().idle && defaultapp::available()) {
+                        const bool isDef = defaultapp::isDefault();
+                        if (isDef && offerDefault && !defaultNote.empty())
+                            defaultNote = "Done: double-clicking a video now opens Tolga Player.";
+                        else if (!isDef && !offerDefault)
+                            defaultNote.clear();  // another player took over: offer it again
+                        offerDefault = !isDef;
+                    }
                     break;
                 case SDL_EVENT_WINDOW_RESIZED:
                 case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -884,6 +901,10 @@ int main(int argc, char** argv) {
         if (act.openFile)          showOpenDialog(window);
         if (!act.openPath.empty()) { player.load(act.openPath.c_str()); holdWhileCasting(); }
         if (act.clearRecent)       recent.clear();
+        if (act.makeDefaultPlayer) {
+            defaultNote = defaultapp::makeDefault();
+            offerDefault = !defaultapp::isDefault();
+        }
         if (act.seekRelative != 0) {
             if (castActive()) airplay->seek(castStatus.position + act.seekRelative);
             else              player.seekRelative(act.seekRelative);
