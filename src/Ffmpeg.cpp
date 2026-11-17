@@ -86,6 +86,7 @@ double probeDuration(const std::string& path) {
     if (ffprobe.empty()) return -1;
     tolga_sub::Process proc;
     if (!proc.start({ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path})) return -1;
+    proc.setBackground();  // playlist lengths can wait for playback and AirPlay
     std::string out;
     char buf[256];
     for (int idle = 0; idle < 100;) {  // gives up after ~20 s without output
