@@ -254,10 +254,10 @@
       <h1>Every movie, on your Apple&nbsp;TV.</h1>
       <p class="lede">Tolga Player sends any movie from your Mac or PC to your Apple TV over AirPlay. MP4 and MOV go as they are, and it also plays the MKV and DTS files the Apple TV can't open on its own. Every audio language and subtitle comes along.</p>
       <div class="actions">
-        <a class="button primary" data-link="downloadUrl" data-os-label href="#">Download for Mac</a>
-        <a class="button ghost" href="#pricing"><span>Get AirPlay support for <span data-text="price">$14.99</span></span></a>
+        <a class="button primary" data-link="downloadUrl" data-os-label href="#">Download free for Mac</a>
       </div>
-      <p class="fine"><strong>Tolga Player is open source and free on your computer, forever.</strong> The AirPlay part is free for 14 days.</p>
+      <p class="fine"><strong>Open source and free on your computer, forever.</strong> AirPlay is free to try for 14 days,
+        then a one-time <a class="alt" href="#pricing">license</a>.</p>
       <p class="fine sys" id="os-note">For Macs with Apple Silicon or Intel.
         <span class="keep">Also for <a class="alt" data-link="downloadWindows" href="#">Windows</a> and <a class="alt" data-link="downloadLinux" href="#">Linux</a>.</span></p>
     </div>
@@ -523,13 +523,13 @@
   const macUrl = CONFIG.downloadUrl;
   if (CONFIG.linuxReady && /Linux/.test(navigator.platform || navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
     CONFIG.downloadUrl = CONFIG.downloadLinux;
-    for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Linux";
+    for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download free for Linux";
     document.getElementById("os-note").innerHTML =
       'For 64-bit Linux. Also for <a class="alt" href="' + macUrl + '">Mac</a> and <a class="alt" href="' + CONFIG.downloadWindows + '">Windows</a>.';
   } else if (/Win/.test(navigator.platform || navigator.userAgent)) {
     // Windows: the installer first, Mac and Linux as the other choices
     CONFIG.downloadUrl = CONFIG.downloadWindows;
-    for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download for Windows";
+    for (const el of document.querySelectorAll("[data-os-label]")) el.textContent = "Download free for Windows";
     document.getElementById("os-note").innerHTML =
       'For Windows 10 and 11 (64-bit). Also for <a class="alt" href="' + macUrl + '">Mac</a> and <a class="alt" href="' + CONFIG.downloadLinux + '">Linux</a>.';
   }
