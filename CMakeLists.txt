@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Tolga VERSION 0.1.6 LANGUAGES C CXX)
+project(Tolga VERSION 0.1.7 LANGUAGES C CXX)
 if(APPLE)
   enable_language(OBJCXX)   # must come right after project(), before any target (Ninja needs it)
 endif()
