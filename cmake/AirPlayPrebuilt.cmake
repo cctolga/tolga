@@ -1,9 +1,5 @@
 # The prebuilt, closed-source AirPlay modules that builds from source download, one per platform.
 # Written by tolga-airplay/scripts/package-prebuilt.sh --publish; don't edit by hand.
-set(TOLGA_AIRPLAY_PREBUILT_windows_x86_64_VERSION "1.0.3")
-set(TOLGA_AIRPLAY_PREBUILT_windows_x86_64_API 1)
-set(TOLGA_AIRPLAY_PREBUILT_windows_x86_64_URL "https://github.com/cctolga/tolga/releases/download/airplay-1.0.3/tolga-airplay-1.0.3-api1-windows-x86_64.tar.gz")
-set(TOLGA_AIRPLAY_PREBUILT_windows_x86_64_SHA256 "8909eff1329c20b8df006b312c262364e64225e7b3037e7dd6d96668e8fe6ade")
 set(TOLGA_AIRPLAY_PREBUILT_macos_VERSION "1.0.3")
 set(TOLGA_AIRPLAY_PREBUILT_macos_API 1)
 set(TOLGA_AIRPLAY_PREBUILT_macos_URL "https://github.com/cctolga/tolga/releases/download/airplay-1.0.3/tolga-airplay-1.0.3-api1-macos.tar.gz")
@@ -12,3 +8,7 @@ set(TOLGA_AIRPLAY_PREBUILT_linux_x86_64_VERSION "1.0.4")
 set(TOLGA_AIRPLAY_PREBUILT_linux_x86_64_API 1)
 set(TOLGA_AIRPLAY_PREBUILT_linux_x86_64_URL "https://github.com/cctolga/tolga/releases/download/airplay-1.0.4/tolga-airplay-1.0.4-api1-linux-x86_64.tar.gz")
 set(TOLGA_AIRPLAY_PREBUILT_linux_x86_64_SHA256 "a4b2c78671ccad326945115bb3278d0dcd67664e7cc23b8c1669037c1a0f4615")
+set(TOLGA_AIRPLAY_PREBUILT_windows_x86_64_VERSION "1.0.4")
+set(TOLGA_AIRPLAY_PREBUILT_windows_x86_64_API 1)
+set(TOLGA_AIRPLAY_PREBUILT_windows_x86_64_URL "https://github.com/cctolga/tolga/releases/download/airplay-1.0.4/tolga-airplay-1.0.4-api1-windows-x86_64.tar.gz")
+set(TOLGA_AIRPLAY_PREBUILT_windows_x86_64_SHA256 "a73ade1fe296da693be2e053095fb9bf521456ddb36819cfaea32b612f317fb0")
