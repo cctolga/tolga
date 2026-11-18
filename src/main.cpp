@@ -235,8 +235,8 @@ void fitWindowToVideo(SDL_Window* window, int vw, int vh) {
     const int w = std::max(int(480 * ui), int(vw * scale));
     const int h = std::max(int(270 * ui), int(w * float(vh) / vw));
 
-    SDL_SetWindowAspectRatio(window, float(vw) / vh, float(vw) / vh);
     SDL_SetWindowSize(window, w, h);
+    chrome::keepAspect(window, float(vw) / vh);
     SDL_SetWindowPosition(window, usable.x + (usable.w - w) / 2, usable.y + (usable.h - h) / 2);
 }
 
@@ -628,6 +628,7 @@ int main(int argc, char** argv) {
         }
         // Sleep until something happens. While the controls are fading, or ImGui
         // still needs frames, poll instead so animations stay smooth (vsync paces us).
+        chrome::tick(window, !player.state().idle);  // Linux: the video's shape after a resize
         SDL_Event e;
         const bool busy = overlay.isAnimating() || redrawFrames > 0;
         bool gotEvent = busy ? SDL_PollEvent(&e) : SDL_WaitEventTimeout(&e, 100);
@@ -704,6 +705,8 @@ int main(int argc, char** argv) {
                     }
                     break;
                 case SDL_EVENT_WINDOW_RESIZED:
+                    chrome::resized(window);
+                    [[fallthrough]];
                 case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
                     redrawFrames = std::max(redrawFrames, 2);  // draw again once the size has settled
                     break;

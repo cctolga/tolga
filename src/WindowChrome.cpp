@@ -40,20 +40,22 @@ SDL_HitTestResult hitTest(SDL_Window* window, const SDL_Point* p, void*) {
         if (top && right) return SDL_HITTEST_RESIZE_TOPRIGHT;
         if (bottom && left) return SDL_HITTEST_RESIZE_BOTTOMLEFT;
         if (bottom && right) return SDL_HITTEST_RESIZE_BOTTOMRIGHT;
-        // With a video open the window keeps the video's aspect ratio, and the window manager
-        // (Ubuntu's at least) then lets a plain edge only shrink it: every edge resizes from
-        // a corner beside it instead, which grows and shrinks.
-        float minAspect = 0, maxAspect = 0;
-        const bool aspect = SDL_GetWindowAspectRatio(window, &minAspect, &maxAspect) && minAspect > 0;
-        if (left) return aspect ? SDL_HITTEST_RESIZE_BOTTOMLEFT : SDL_HITTEST_RESIZE_LEFT;
-        if (right) return aspect ? SDL_HITTEST_RESIZE_BOTTOMRIGHT : SDL_HITTEST_RESIZE_RIGHT;
-        if (top) return aspect ? SDL_HITTEST_RESIZE_TOPRIGHT : SDL_HITTEST_RESIZE_TOP;
-        if (bottom) return aspect ? SDL_HITTEST_RESIZE_BOTTOMRIGHT : SDL_HITTEST_RESIZE_BOTTOM;
+        if (left) return SDL_HITTEST_RESIZE_LEFT;
+        if (right) return SDL_HITTEST_RESIZE_RIGHT;
+        if (top) return SDL_HITTEST_RESIZE_TOP;
+        if (bottom) return SDL_HITTEST_RESIZE_BOTTOM;
     }
     // the title strip moves the window (the system does it, which works on Wayland too)
     if (p->y < g_hit.barH * g_hit.unit && p->x < w - g_hit.buttonsW * g_hit.unit) return SDL_HITTEST_DRAGGABLE;
     return SDL_HITTEST_NORMAL;
 }
+
+// The video's shape, kept by Tolga itself with the custom frame (see keepAspect).
+struct Aspect {
+    float ratio = 0;            // width / height, 0 = none
+    int w = 0, h = 0;           // the size it last had the right shape at
+    uint64_t snapAt = 0;        // when to fix the shape after a resize (ms), 0 = nothing to do
+} g_aspect;
 
 }  // namespace
 
@@ -107,6 +109,46 @@ void roundCorners(SDL_Window* window, int fbw, int fbh, float pixelsPerPoint, bo
     }
     glDisable(GL_SCISSOR_TEST);
     glClearColor(clear[0], clear[1], clear[2], clear[3]);
+}
+
+void keepAspect(SDL_Window* window, float ratio) {
+    if (!customFrame()) {
+        SDL_SetWindowAspectRatio(window, ratio, ratio);
+        return;
+    }
+    // With a fixed aspect ratio Ubuntu's window manager lets the edges of a frameless window
+    // only shrink it. Without one the edges resize freely, and Tolga fixes the shape once
+    // the mouse lets go (see tick).
+    g_aspect.ratio = ratio;
+    SDL_GetWindowSize(window, &g_aspect.w, &g_aspect.h);
+    g_aspect.snapAt = 0;
+}
+
+void resized(SDL_Window*) {
+    if (customFrame() && g_aspect.ratio > 0) g_aspect.snapAt = SDL_GetTicks() + 150;
+}
+
+void tick(SDL_Window* window, bool videoOpen) {
+    if (!g_aspect.snapAt || SDL_GetTicks() < g_aspect.snapAt) return;
+    if (SDL_GetGlobalMouseState(nullptr, nullptr) & SDL_BUTTON_LMASK) {  // still dragging
+        g_aspect.snapAt = SDL_GetTicks() + 100;
+        return;
+    }
+    g_aspect.snapAt = 0;
+    const SDL_WindowFlags flags = SDL_GetWindowFlags(window);
+    if (!videoOpen || g_aspect.ratio <= 0 || (flags & (SDL_WINDOW_MAXIMIZED | SDL_WINDOW_FULLSCREEN))) return;
+    int w = 0, h = 0;
+    SDL_GetWindowSize(window, &w, &h);
+    if (w <= 0 || h <= 0) return;
+    // keep the side the user moved more, fit the other to the video
+    const float dw = g_aspect.w > 0 ? std::abs(float(w - g_aspect.w)) / float(g_aspect.w) : 1.0f;
+    const float dh = g_aspect.h > 0 ? std::abs(float(h - g_aspect.h)) / float(g_aspect.h) : 0.0f;
+    int nw = w, nh = h;
+    if (dw >= dh) nh = int(std::lround(float(w) / g_aspect.ratio));
+    else          nw = int(std::lround(float(h) * g_aspect.ratio));
+    if (std::abs(nw - w) > 1 || std::abs(nh - h) > 1) SDL_SetWindowSize(window, nw, nh);
+    g_aspect.w = nw;
+    g_aspect.h = nh;
 }
 
 void setDarkTitlebar(SDL_Window* window, bool dark) {

@@ -26,6 +26,12 @@ void update(SDL_Window* window, float unitToWindow, bool fullscreen);
 // Cuts the corners round (clears them to transparent) after the frame is drawn.
 void roundCorners(SDL_Window* window, int fbw, int fbh, float pixelsPerPoint, bool fullscreen);
 
+// The window keeps the video's shape (`ratio` = width / height). With the custom frame
+// Tolga does it itself: `resized` on every resize event, `tick` every turn of the loop.
+void keepAspect(SDL_Window* window, float ratio);
+void resized(SDL_Window* window);
+void tick(SDL_Window* window, bool videoOpen);
+
 // Windows: the title bar in dark (true) or light; no-op elsewhere.
 void setDarkTitlebar(SDL_Window* window, bool dark);
 
