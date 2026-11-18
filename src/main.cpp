@@ -300,8 +300,8 @@ int main(int argc, char** argv) {
     // Linux draws its own frame; a transparent window lets it round the corners. If no GL
     // config with alpha is there, the same again without (square corners).
     for (int pass = 0; pass < 2 && !gl; ++pass) {
-    const bool transparent = chrome::customFrame() && pass == 0;
-    if (pass == 1 && !chrome::customFrame()) break;
+    const bool transparent = chrome::transparentCorners() && pass == 0;
+    if (pass == 1 && !chrome::transparentCorners()) break;
     for (const GlVersion& v : glVersions) {
         SDL_GL_ResetAttributes();
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, v.major);
@@ -385,6 +385,14 @@ int main(int argc, char** argv) {
     }
     if (std::strcmp(glslVersion, "#version 120") == 0) {
         player.useLightRendering();
+        // Graphics this old decode in hardware, but mpv must copy every picture back for
+        // OpenGL 2.1, and that copy is the slow part: a 1920x800 film stuttered with it and
+        // played smoothly decoded by the processor (Intel HD of 2010, Windows 10). The
+        // switch in the settings still turns it on. (Linux on the same laptop plays well
+        // with VA-API, so only Windows.)
+#ifdef _WIN32
+        player.setHardwareDecoding(false);
+#endif
         trace("OpenGL 2.1: mpv's fast profile");
     }
     trace("mpv ready");

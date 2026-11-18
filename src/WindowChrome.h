@@ -5,7 +5,9 @@
 // over the video (Overlay::drawWindowChrome), the top strip drags the window and the edges
 // resize it (SDL hit test), and the corners are rounded when the desktop can show a
 // transparent window. TOLGA_NATIVE_FRAME=1 brings the system frame back.
-// Windows: the system title bar stays, in dark or light to match Tolga's appearance.
+// Windows: the same title and buttons from Tolga. The window keeps the system's shadow and
+// snapping (SDL's borderless style still has a sizing frame), Windows 11 rounds its corners
+// itself; Windows 10 has square windows anyway.
 
 #include <cstdint>
 
@@ -13,7 +15,9 @@ struct SDL_Window;
 
 namespace chrome {
 
-bool customFrame();  // Linux, unless TOLGA_NATIVE_FRAME=1
+bool customFrame();  // Linux and Windows, unless TOLGA_NATIVE_FRAME=1
+// Whether the corners are cut round by Tolga, in a transparent window (Linux only).
+bool transparentCorners();
 
 // Extra SDL window flags for the custom frame (borderless; transparent for the corners).
 uint64_t windowFlags(bool transparent);
@@ -32,7 +36,7 @@ void keepAspect(SDL_Window* window, float ratio);
 void resized(SDL_Window* window);
 void tick(SDL_Window* window, bool videoOpen);
 
-// Windows: the title bar in dark (true) or light; no-op elsewhere.
+// Windows with the system frame: its title bar in dark (true) or light; no-op elsewhere.
 void setDarkTitlebar(SDL_Window* window, bool dark);
 
 }  // namespace chrome

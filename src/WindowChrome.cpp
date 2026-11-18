@@ -60,9 +60,17 @@ struct Aspect {
 }  // namespace
 
 bool customFrame() {
-#if defined(__linux__)
+#if defined(__linux__) || defined(_WIN32)
     const char* native = std::getenv("TOLGA_NATIVE_FRAME");
     return !(native && *native && *native != '0');
+#else
+    return false;
+#endif
+}
+
+bool transparentCorners() {
+#if defined(__linux__)
+    return customFrame();
 #else
     return false;
 #endif
@@ -79,6 +87,15 @@ void setup(SDL_Window* window, float barH, float buttonsW) {
     g_hit.barH = barH;
     g_hit.buttonsW = buttonsW;
     SDL_SetWindowHitTest(window, hitTest, nullptr);
+#ifdef _WIN32
+    // Windows 11: round corners for this frameless window too (DWMWA_WINDOW_CORNER_PREFERENCE
+    // = DWMWCP_ROUND); Windows 10 doesn't know the attribute and keeps them square.
+    if (HWND hwnd = static_cast<HWND>(SDL_GetPointerProperty(SDL_GetWindowProperties(window),
+                                                             SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr))) {
+        const DWORD round = 2;
+        DwmSetWindowAttribute(hwnd, 33, &round, sizeof round);
+    }
+#endif
 }
 
 void update(SDL_Window*, float unitToWindow, bool fullscreen) {
@@ -112,7 +129,8 @@ void roundCorners(SDL_Window* window, int fbw, int fbh, float pixelsPerPoint, bo
 }
 
 void keepAspect(SDL_Window* window, float ratio) {
-    if (!customFrame()) {
+    // Windows keeps the shape while the edge is dragged, frame or not (SDL answers WM_SIZING)
+    if (!transparentCorners()) {
         SDL_SetWindowAspectRatio(window, ratio, ratio);
         return;
     }
@@ -125,7 +143,7 @@ void keepAspect(SDL_Window* window, float ratio) {
 }
 
 void resized(SDL_Window*) {
-    if (customFrame() && g_aspect.ratio > 0) g_aspect.snapAt = SDL_GetTicks() + 150;
+    if (transparentCorners() && g_aspect.ratio > 0) g_aspect.snapAt = SDL_GetTicks() + 150;
 }
 
 void tick(SDL_Window* window, bool videoOpen) {
@@ -153,6 +171,7 @@ void tick(SDL_Window* window, bool videoOpen) {
 
 void setDarkTitlebar(SDL_Window* window, bool dark) {
 #ifdef _WIN32
+    if (customFrame()) return;  // Tolga's own title bar follows the theme already
     static int last = -1;
     if (last == int(dark)) return;
     HWND hwnd = static_cast<HWND>(
