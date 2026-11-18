@@ -152,9 +152,16 @@ private:
     void readTrackList(const mpv_node& list);
     void readPlaylist(const mpv_node& list);
     void readChapters(const mpv_node& list);
+    void applyEqualizer();
 
     mpv_handle*         m_mpv = nullptr;
     mpv_render_context* m_render = nullptr;
     std::function<void()> m_wakeup;
     PlayerState m_state;
+    float m_eqGains[kEqBands] = {};    // what the user set
+    float m_eqApplied[kEqBands] = {};  // what the filter chain has now
+    bool m_eqBuilt = false;
+    bool m_eqStale = false;            // gains changed by af-command since it was built
+    int m_eqRate = 0;
+    int m_sampleRate = 0;              // of the audio playing now
 };

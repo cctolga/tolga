@@ -1,4 +1,6 @@
 #include "MpvPlayer.h"
+
+#include <algorithm>
 #include "I18n.h"
 
 #include <cstdio>
@@ -12,7 +14,7 @@ enum PropId : uint64_t {
     kTimePos = 1, kDuration, kPause, kVolume, kMute, kIdle, kTitle, kDWidth, kDHeight,
     kTrackList, kSubVisible, kPath, kSecondarySid, kSecondaryVisible, kAudioDelay, kSubDelay,
     kSpeed, kRotate, kHwdec, kBrightness, kContrast, kSaturation, kGamma, kHue,
-    kPlaylist, kPlaylistPos, kChapterList, kChapter, kLoopFile, kLoopPlaylist, kShuffle
+    kPlaylist, kPlaylistPos, kChapterList, kChapter, kLoopFile, kLoopPlaylist, kShuffle, kSampleRate
 };
 }
 
@@ -122,6 +124,7 @@ bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wake
     mpv_observe_property(m_mpv, kHue, "hue", MPV_FORMAT_INT64);
     mpv_observe_property(m_mpv, kSecondaryVisible, "secondary-sub-visibility", MPV_FORMAT_FLAG);
     mpv_observe_property(m_mpv, kPath,     "path",        MPV_FORMAT_STRING);
+    mpv_observe_property(m_mpv, kSampleRate, "audio-params/samplerate", MPV_FORMAT_INT64);
 
     mpv_set_wakeup_callback(m_mpv, &MpvPlayer::onWakeup, this);
     mpv_render_context_set_update_callback(m_render, &MpvPlayer::onWakeup, this);
@@ -302,18 +305,58 @@ void MpvPlayer::resetVideoSettings() {
 const float MpvPlayer::kEqFrequencies[MpvPlayer::kEqBands] = {32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000};
 
 void MpvPlayer::setEqualizer(const float gains[kEqBands]) {
-    // one ffmpeg "equalizer" peak filter per band, one octave wide, as IINA does
-    std::string graph;
+    std::copy(gains, gains + kEqBands, m_eqGains);
+    applyEqualizer();
+}
+
+// One ffmpeg "equalizer" peak filter per band, one octave wide, as IINA does.
+//  - A band must stay well under half the sample rate: at 16 kHz on a 32 kHz track the
+//    filter divides by zero and every sample after that is silent.
+//  - The chain is built once with all bands (named equalizer@b0...) and later moves only
+//    change gains with af-command. Building it again on every slider move reopened the
+//    audio chain dozens of times a second.
+void MpvPlayer::applyEqualizer() {
     bool any = false;
-    for (int i = 0; i < kEqBands; ++i) {
-        if (std::abs(gains[i]) < 0.05f) continue;
-        char band[96];
-        std::snprintf(band, sizeof band, "%sequalizer=f=%g:t=o:w=1:g=%.1f", any ? "," : "", kEqFrequencies[i], gains[i]);
-        graph += band;
-        any = true;
+    for (float g : m_eqGains) any = any || std::abs(g) >= 0.05f;
+    if (!any) {
+        if (m_eqBuilt) setString(m_mpv, "af", "");
+        m_eqBuilt = false;
+        return;
     }
-    const std::string af = any ? "@tolgaeq:lavfi=[" + graph + "]" : "";
-    setString(m_mpv, "af", af.c_str());
+    const int rate = m_sampleRate > 0 ? m_sampleRate : 48000;
+    auto fits = [&](int i) { return kEqFrequencies[i] < rate * 0.4f; };
+    char value[32];
+    if (!m_eqBuilt || rate != m_eqRate) {
+        std::string graph;
+        for (int i = 0; i < kEqBands; ++i) {
+            if (!fits(i)) continue;
+            char band[112];
+            std::snprintf(band, sizeof band, "%sequalizer@b%d=f=%g:t=o:w=1:g=%.1f", graph.empty() ? "" : ",", i,
+                          kEqFrequencies[i], m_eqGains[i]);
+            graph += band;
+            m_eqApplied[i] = m_eqGains[i];
+        }
+        setString(m_mpv, "af", graph.empty() ? std::string() : "@tolgaeq:lavfi=[" + graph + "]");
+        m_eqBuilt = !graph.empty();
+        m_eqStale = false;
+        m_eqRate = rate;
+        return;
+    }
+    for (int i = 0; i < kEqBands; ++i) {
+        if (!fits(i) || m_eqGains[i] == m_eqApplied[i]) continue;
+        std::snprintf(value, sizeof value, "%.1f", m_eqGains[i]);
+        char target[24];
+        std::snprintf(target, sizeof target, "equalizer@b%d", i);
+        const char* args[] = {"af-command", "tolgaeq", "g", value, target, nullptr};
+        if (mpv_command(m_mpv, args) < 0) {
+            // no audio chain right now (a file is just opening): build it with the gains
+            m_eqBuilt = false;
+            applyEqualizer();
+            return;
+        }
+        m_eqApplied[i] = m_eqGains[i];
+        m_eqStale = true;  // the "af" text doesn't have this gain
+    }
 }
 
 void MpvPlayer::cycleSubtitle() {
@@ -478,6 +521,14 @@ bool MpvPlayer::processEvents(bool& fileLoaded) {
         case MPV_EVENT_FILE_LOADED:
             fileLoaded = true;
             break;
+        case MPV_EVENT_AUDIO_RECONFIG:
+            // mpv made the audio chain again (another file or audio track) from the "af"
+            // text, which still has the gains of when it was built: put the current ones in
+            if (m_eqBuilt && m_eqStale) {
+                m_eqBuilt = false;
+                applyEqualizer();
+            }
+            break;
         case MPV_EVENT_PROPERTY_CHANGE: {
             auto* prop = static_cast<mpv_event_property*>(ev->data);
             const bool has = prop->format != MPV_FORMAT_NONE && prop->data;
@@ -492,6 +543,14 @@ bool MpvPlayer::processEvents(bool& fileLoaded) {
             case kDWidth:   m_state.videoW   = has ? int(*static_cast<int64_t*>(prop->data)) : 0; break;
             case kDHeight:  m_state.videoH   = has ? int(*static_cast<int64_t*>(prop->data)) : 0; break;
             case kPath:     m_state.path     = has ? *static_cast<char**>(prop->data) : ""; break;
+            case kSampleRate: {
+                const int rate = has ? int(*static_cast<int64_t*>(prop->data)) : 0;
+                if (rate > 0 && rate != m_sampleRate) {
+                    m_sampleRate = rate;
+                    applyEqualizer();  // the bands that fit under this rate's highest frequency
+                }
+                break;
+            }
             case kSubVisible: m_state.subVisible = !has || *static_cast<int*>(prop->data); break;
             case kPlaylist:
                 m_state.playlist.clear();
