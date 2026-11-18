@@ -339,6 +339,26 @@ int main(int argc, char** argv) {
         return 1;
     }
     SDL_GL_MakeCurrent(window, gl);
+    // What the driver really gave: on Windows SDL hands back an old-style context, without an
+    // error, when the driver can't make the 3.x one asked for (Intel graphics before 2011 have
+    // OpenGL 2.1 there). The shaders of the controls must then be GLSL 1.20.
+    {
+        const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        trace("OpenGL %s, %s", version ? version : "?", renderer ? renderer : "?");
+        int major = 0, minor = 0;
+        if (version) std::sscanf(version, "%d.%d", &major, &minor);
+        const int got = major * 10 + minor;
+        if (got > 0 && got < 21) {
+            std::fprintf(stderr, "OpenGL %s is too old (Tolga Player needs 2.1 or newer)\n", version);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player",
+                T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it."),
+                window);
+            return 1;
+        }
+        if (got > 0 && got < 30) glslVersion = "#version 120";
+        else if (got > 0 && got < 32 && std::strcmp(glslVersion, "#version 150") == 0) glslVersion = "#version 130";
+    }
     chrome::setup(window, Overlay::kChromeH, 3 * Overlay::kChromeButtonW);
     SDL_GL_SetSwapInterval(1);  // vsync
     trace("window + OpenGL context ready (%s)", glslVersion);
@@ -355,11 +375,24 @@ int main(int argc, char** argv) {
     trace("SDL_ShowWindow");
 
     MpvPlayer player;
-    if (!player.init(getProcAddress, pushWake)) return 1;
+    if (!player.init(getProcAddress, pushWake)) {
+        // say so instead of vanishing (a windowed app on Windows has no terminal for stderr)
+        trace("mpv failed: %s", player.initError().c_str());
+        const std::string msg = std::string(T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it.")) +
+                                "\n\n" + player.initError();
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player", msg.c_str(), window);
+        return 1;
+    }
     trace("mpv ready");
 
     Overlay overlay;
-    if (!overlay.init(window, gl, glslVersion)) return 1;
+    if (!overlay.init(window, gl, glslVersion)) {
+        trace("controls failed (%s)", glslVersion);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player",
+            T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it."),
+            window);
+        return 1;
+    }
     trace("overlay ready");
 
     // Settings live in the per-user app data folder (~/Library/Application Support/Tolga on

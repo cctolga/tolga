@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include "I18n.h"
+#include "Paths.h"
 
 #include <cstdio>
 #include <cmath>
@@ -41,7 +42,8 @@ bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wake
 
     m_mpv = mpv_create();
     if (!m_mpv) {
-        std::fprintf(stderr, "mpv_create failed\n");
+        m_initError = "mpv_create failed";
+        std::fprintf(stderr, "%s\n", m_initError.c_str());
         return false;
     }
 
@@ -56,6 +58,13 @@ bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wake
     // TOLGA_MPV_LOG=v (or debug) enables verbose mpv logging for troubleshooting.
     const char* logLevel = std::getenv("TOLGA_MPV_LOG");
     mpv_set_option_string(m_mpv, "msg-level", (std::string("all=") + (logLevel ? logLevel : "warn")).c_str());
+    // TOLGA_TRACE=1 also keeps mpv's own detailed log next to the trace (tolga-mpv.log in the
+    // temp folder): on Windows a windowed app has no terminal to print it to.
+    if (const char* t = std::getenv("TOLGA_TRACE"); t && *t && *t != '0') {
+        std::error_code ec;
+        const auto dir = std::filesystem::temp_directory_path(ec);
+        if (!ec) mpv_set_option_string(m_mpv, "log-file", utf8String(dir / "tolga-mpv.log").c_str());
+    }
 
     // Subtitles: pick up "Movie.tr.srt", "Movie.srt" etc. from the video's folder,
     // prefer Turkish then English, and give them a clean, readable look.
@@ -72,8 +81,9 @@ bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wake
     mpv_set_option_string(m_mpv, "sub-shadow-color", "#80000000");
     mpv_set_option_string(m_mpv, "sub-margin-y", "36");
 
-    if (mpv_initialize(m_mpv) < 0) {
-        std::fprintf(stderr, "mpv_initialize failed\n");
+    if (const int err = mpv_initialize(m_mpv); err < 0) {
+        m_initError = std::string("mpv_initialize failed: ") + mpv_error_string(err);
+        std::fprintf(stderr, "%s\n", m_initError.c_str());
         return false;
     }
 
@@ -88,8 +98,9 @@ bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wake
         {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &glInit},
         {MPV_RENDER_PARAM_INVALID, nullptr},
     };
-    if (mpv_render_context_create(&m_render, m_mpv, params) < 0) {
-        std::fprintf(stderr, "mpv_render_context_create failed\n");
+    if (const int err = mpv_render_context_create(&m_render, m_mpv, params); err < 0) {
+        m_initError = std::string("mpv could not draw with this OpenGL (") + mpv_error_string(err) + ")";
+        std::fprintf(stderr, "%s\n", m_initError.c_str());
         return false;
     }
 

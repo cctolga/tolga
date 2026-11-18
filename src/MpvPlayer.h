@@ -81,6 +81,8 @@ public:
     // `wakeup` is called from mpv's internal threads whenever there are new
     // events or a new frame. It must be thread-safe (we push an SDL event).
     bool init(GetProcAddressFn getProcAddress, std::function<void()> wakeup);
+    // why init() failed, for the message to the user and the trace (empty when it worked)
+    const std::string& initError() const { return m_initError; }
     void shutdown();
     // A property as text ("mpv-version", "ffmpeg-version"...), "" if unknown.
     std::string propertyString(const char* name) const;
@@ -147,6 +149,7 @@ public:
     const PlayerState& state() const { return m_state; }
 
 private:
+    std::string m_initError;
     static void onWakeup(void* self);
     void command(const char* const* args);
     void readTrackList(const mpv_node& list);
