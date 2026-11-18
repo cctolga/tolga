@@ -300,8 +300,8 @@ int main(int argc, char** argv) {
     // Linux draws its own frame; a transparent window lets it round the corners. If no GL
     // config with alpha is there, the same again without (square corners).
     for (int pass = 0; pass < 2 && !gl; ++pass) {
-    const bool transparent = chrome::transparentCorners() && pass == 0;
-    if (pass == 1 && !chrome::transparentCorners()) break;
+    const bool transparent = chrome::customFrame() && pass == 0;
+    if (pass == 1 && !chrome::customFrame()) break;
     for (const GlVersion& v : glVersions) {
         SDL_GL_ResetAttributes();
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, v.major);
