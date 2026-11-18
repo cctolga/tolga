@@ -40,10 +40,15 @@ SDL_HitTestResult hitTest(SDL_Window* window, const SDL_Point* p, void*) {
         if (top && right) return SDL_HITTEST_RESIZE_TOPRIGHT;
         if (bottom && left) return SDL_HITTEST_RESIZE_BOTTOMLEFT;
         if (bottom && right) return SDL_HITTEST_RESIZE_BOTTOMRIGHT;
-        if (left) return SDL_HITTEST_RESIZE_LEFT;
-        if (right) return SDL_HITTEST_RESIZE_RIGHT;
-        if (top) return SDL_HITTEST_RESIZE_TOP;
-        if (bottom) return SDL_HITTEST_RESIZE_BOTTOM;
+        // With a video open the window keeps the video's aspect ratio, and the window manager
+        // (Ubuntu's at least) then lets a plain edge only shrink it: every edge resizes from
+        // a corner beside it instead, which grows and shrinks.
+        float minAspect = 0, maxAspect = 0;
+        const bool aspect = SDL_GetWindowAspectRatio(window, &minAspect, &maxAspect) && minAspect > 0;
+        if (left) return aspect ? SDL_HITTEST_RESIZE_BOTTOMLEFT : SDL_HITTEST_RESIZE_LEFT;
+        if (right) return aspect ? SDL_HITTEST_RESIZE_BOTTOMRIGHT : SDL_HITTEST_RESIZE_RIGHT;
+        if (top) return aspect ? SDL_HITTEST_RESIZE_TOPRIGHT : SDL_HITTEST_RESIZE_TOP;
+        if (bottom) return aspect ? SDL_HITTEST_RESIZE_BOTTOMRIGHT : SDL_HITTEST_RESIZE_BOTTOM;
     }
     // the title strip moves the window (the system does it, which works on Wayland too)
     if (p->y < g_hit.barH * g_hit.unit && p->x < w - g_hit.buttonsW * g_hit.unit) return SDL_HITTEST_DRAGGABLE;
