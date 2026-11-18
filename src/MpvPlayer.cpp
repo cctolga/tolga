@@ -142,6 +142,11 @@ bool MpvPlayer::init(GetProcAddressFn getProcAddress, std::function<void()> wake
     return true;
 }
 
+void MpvPlayer::useLightRendering() {
+    const char* args[] = {"apply-profile", "fast", nullptr};
+    if (m_mpv) mpv_command(m_mpv, args);
+}
+
 void MpvPlayer::shutdown() {
     // The render context must be freed before the mpv handle, with the GL context current.
     if (m_render) {

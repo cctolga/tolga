@@ -84,6 +84,9 @@ public:
     // why init() failed, for the message to the user and the trace (empty when it worked)
     const std::string& initError() const { return m_initError; }
     void shutdown();
+    // the cheaper scaling and no dithering of mpv's "fast" profile, for weak graphics
+    // (OpenGL 2.1: Intel graphics before 2011), where the default ones can't keep up
+    void useLightRendering();
     // A property as text ("mpv-version", "ffmpeg-version"...), "" if unknown.
     std::string propertyString(const char* name) const;
 

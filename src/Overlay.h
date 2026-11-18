@@ -214,6 +214,12 @@ public:
     void closeResults() { m_resultsOpen = false; }
 
 private:
+    // Old Intel OpenGL 2.1 drivers on Windows draw only the first of several vertex buffers
+    // given in one frame: everything after it (the idle window, the side panel, menus) stays
+    // invisible. There all lists go to the GPU as one (TOLGA_GL_MERGE=0/1 to force it off/on).
+    bool m_mergeDrawLists = false;
+    struct ImDrawList* m_merged = nullptr;
+    void mergeDrawLists(struct ImDrawData* dd);
     void drawIdleScreen(OverlayActions& out);
     void drawControls(const PlayerState& st, bool fullscreen, const AirPlayView& airplay, OverlayActions& out);
     void drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out);

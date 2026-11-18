@@ -1,4 +1,6 @@
 #include "Overlay.h"
+#include <cstdlib>
+#include <limits>
 #include "I18n.h"
 #include "Paths.h"
 #include "tolga/AirPlayApi.h"
@@ -348,6 +350,10 @@ bool Overlay::init(SDL_Window* window, SDL_GLContext gl, const char* glslVersion
 
     if (!ImGui_ImplSDL3_InitForOpenGL(window, gl)) return false;
     if (!ImGui_ImplOpenGL3_Init(glslVersion)) return false;
+#ifdef _WIN32
+    m_mergeDrawLists = std::strcmp(glslVersion, "#version 120") == 0;
+#endif
+    if (const char* m = std::getenv("TOLGA_GL_MERGE"); m && *m) m_mergeDrawLists = *m != '0';
     m_lastActivity = m_lastFrame = SDL_GetTicks();
     return true;
 }
@@ -357,6 +363,10 @@ void Overlay::shutdown() {
         GLuint tex = m_thumbTex;
         glDeleteTextures(1, &tex);
         m_thumbTex = 0;
+    }
+    if (m_merged) {
+        IM_DELETE(m_merged);
+        m_merged = nullptr;
     }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
@@ -942,7 +952,40 @@ void Overlay::drawToast() {
 
 void Overlay::render() {
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    ImDrawData* dd = ImGui::GetDrawData();
+    if (m_mergeDrawLists) mergeDrawLists(dd);
+    ImGui_ImplOpenGL3_RenderDrawData(dd);
+}
+
+// All of this frame's draw lists as one, so the renderer fills one vertex and one index
+// buffer (see m_mergeDrawLists). Only while the indices still fit ImDrawIdx.
+void Overlay::mergeDrawLists(ImDrawData* dd) {
+    if (dd->CmdListsCount < 2) return;
+    if (size_t(dd->TotalVtxCount) > size_t(std::numeric_limits<ImDrawIdx>::max()) + 1) return;
+    if (!m_merged) m_merged = IM_NEW(ImDrawList)(ImGui::GetDrawListSharedData());
+    ImDrawList& m = *m_merged;
+    m.CmdBuffer.resize(0);
+    m.VtxBuffer.resize(0);
+    m.IdxBuffer.resize(0);
+    m.VtxBuffer.reserve(dd->TotalVtxCount);
+    m.IdxBuffer.reserve(dd->TotalIdxCount);
+    // VtxOffset is always 0 here: without glDrawElementsBaseVertex (OpenGL 3.2) the renderer
+    // doesn't announce it, and ImGui then starts a new list instead of a vertex offset.
+    for (const ImDrawList* list : dd->CmdLists) {
+        const unsigned vtxBase = unsigned(m.VtxBuffer.Size);
+        const unsigned idxBase = unsigned(m.IdxBuffer.Size);
+        for (const ImDrawVert& v : list->VtxBuffer) m.VtxBuffer.push_back(v);
+        for (const ImDrawIdx i : list->IdxBuffer) m.IdxBuffer.push_back(ImDrawIdx(i + vtxBase));
+        for (const ImDrawCmd& c : list->CmdBuffer) {
+            ImDrawCmd n = c;
+            n.IdxOffset = idxBase + c.IdxOffset;
+            n.VtxOffset = 0;
+            m.CmdBuffer.push_back(n);
+        }
+    }
+    dd->CmdLists.resize(0);
+    dd->CmdLists.push_back(&m);
+    dd->CmdListsCount = 1;
 }
 
 // ------------------------------------------------------------- idle screen

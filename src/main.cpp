@@ -383,6 +383,10 @@ int main(int argc, char** argv) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player", msg.c_str(), window);
         return 1;
     }
+    if (std::strcmp(glslVersion, "#version 120") == 0) {
+        player.useLightRendering();
+        trace("OpenGL 2.1: mpv's fast profile");
+    }
     trace("mpv ready");
 
     Overlay overlay;
