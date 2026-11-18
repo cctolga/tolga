@@ -8,6 +8,9 @@
 #include "Thumbnailer.h"
 #include "RecentFiles.h"
 #include "MacWindow.h"
+#include "WindowChrome.h"
+
+#include <imgui.h>
 #include "DefaultApp.h"
 #include "I18n.h"
 #include "Overlay.h"
@@ -294,6 +297,11 @@ int main(int argc, char** argv) {
     SDL_GLContext gl = nullptr;
     const char* glslVersion = nullptr;
     std::string glError;
+    // Linux draws its own frame; a transparent window lets it round the corners. If no GL
+    // config with alpha is there, the same again without (square corners).
+    for (int pass = 0; pass < 2 && !gl; ++pass) {
+    const bool transparent = chrome::customFrame() && pass == 0;
+    if (pass == 1 && !chrome::customFrame()) break;
     for (const GlVersion& v : glVersions) {
         SDL_GL_ResetAttributes();
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, v.major);
@@ -301,9 +309,11 @@ int main(int argc, char** argv) {
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, v.profile);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, v.flags);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        if (transparent) SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
         // a new window each time: on EGL the window's config is tied to the context type
         window = SDL_CreateWindow("Tolga Player", 960, 540,
-            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN);
+            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN |
+                chrome::windowFlags(transparent));
         if (!window) {
             std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
             return 1;
@@ -319,6 +329,7 @@ int main(int argc, char** argv) {
         SDL_DestroyWindow(window);
         window = nullptr;
     }
+    }
     if (!gl) {
         std::fprintf(stderr, "Could not create an OpenGL context (Tolga Player needs OpenGL 2.1 or newer):%s\n",
                      glError.c_str());
@@ -328,6 +339,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     SDL_GL_MakeCurrent(window, gl);
+    chrome::setup(window, Overlay::kChromeH, 3 * Overlay::kChromeButtonW);
     SDL_GL_SetSwapInterval(1);  // vsync
     trace("window + OpenGL context ready (%s)", glslVersion);
     SDL_SetWindowMinimumSize(window, 480, 270);
@@ -574,13 +586,20 @@ int main(int argc, char** argv) {
         const Uint64 tfBeforeDraw = SDL_GetTicksNS();
         overlay.setRecentFiles(st.idle ? &recent.existing() : nullptr);
         overlay.setDefaultPlayer(defaultAvailable, offerDefault, defaultNote);
+        overlay.setCustomChrome(chrome::customFrame(), (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) != 0);
         OverlayActions act = overlay.draw(st, fullscreen, apView, onlineView, playlistView);
+        int winW = 0, winH = 0;
+        SDL_GetWindowSize(window, &winW, &winH);
+        if (const float uiW = ImGui::GetIO().DisplaySize.x; uiW > 0 && winW > 0)
+            chrome::update(window, float(winW) / uiW, fullscreen);
+        chrome::setDarkTitlebar(window, !overlay.lightTheme());
         tfDraw = SDL_GetTicksNS() - tfBeforeDraw;
         // the title bar buttons fade together with the controls
         macSetTitlebarAlpha(window, overlay.controlsAlpha());
         macSetAppearance(window, overlay.lightTheme());
         const Uint64 tfBeforeImgui = SDL_GetTicksNS();
         overlay.render();
+        chrome::roundCorners(window, fbw, fbh, winW > 0 ? float(fbw) / float(winW) : 1.0f, fullscreen);
         tfImgui = SDL_GetTicksNS() - tfBeforeImgui;
         SDL_GL_SwapWindow(window);
         player.reportSwap();
@@ -905,6 +924,16 @@ int main(int argc, char** argv) {
         }
         if (act.toggleMute)        player.toggleMute();
         if (act.toggleFullscreen)  toggleFullscreen();
+        if (act.minimizeWindow)    SDL_MinimizeWindow(window);
+        if (act.toggleMaximize) {
+            if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) SDL_RestoreWindow(window);
+            else                                                   SDL_MaximizeWindow(window);
+        }
+        if (act.closeWindow) {
+            SDL_Event quit{};
+            quit.type = SDL_EVENT_QUIT;
+            SDL_PushEvent(&quit);
+        }
         if (act.openFile)          showOpenDialog(window);
         if (!act.openPath.empty()) { player.load(act.openPath.c_str()); holdWhileCasting(); }
         if (act.clearRecent)       recent.clear();

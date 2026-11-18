@@ -93,6 +93,9 @@ struct OverlayActions {
     std::string licenseKey;
     bool        openBuyPage = false;
     bool        openWebsite = false;
+    bool        minimizeWindow = false;  // the window buttons Tolga draws itself (Linux)
+    bool        toggleMaximize = false;
+    bool        closeWindow    = false;
 
     bool        submitPin = false;          // user typed the PIN shown on the TV
     std::string pin;
@@ -153,6 +156,11 @@ public:
     void poke();  // mark user activity (e.g. a key press)
     // macOS: the native title bar sits transparently over the video (see MacWindow.h).
     void setTitlebarOverlay(bool on, bool fullscreen) { m_titlebarOverlay = on; m_fullscreen = fullscreen; }
+    // Linux: the window has no system frame; Tolga draws the title, the window buttons and
+    // leaves the top strip for dragging (see chromeHeight / chromeButtonsWidth).
+    void setCustomChrome(bool on, bool maximized) { m_customChrome = on; m_maximized = maximized; }
+    static constexpr float kChromeH = 32.0f;          // in UI units, like everything here
+    static constexpr float kChromeButtonW = 46.0f;
     float controlsAlpha() const { return m_alpha; }
     // Seek-bar previews come from here (may be null).
     void setThumbnails(const Thumbnailer* thumbs) { m_thumbs = thumbs; }
@@ -211,7 +219,11 @@ private:
     void drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out);
     void drawTitleBar(const PlayerState& st);
     void drawTitleShade();
-    float topInset() const { return m_titlebarOverlay && !m_fullscreen ? 28.0f : 0.0f; }
+    float topInset() const {
+        if (m_fullscreen) return 0.0f;
+        return m_customChrome ? kChromeH : m_titlebarOverlay ? 28.0f : 0.0f;
+    }
+    void drawWindowChrome(const PlayerState& st, OverlayActions& out);
     void drawSidePanel(const PlayerState& st, const AirPlayView& airplay, const OnlineView& online,
                        OverlayActions& out);
     void drawResultsDialog(const OnlineView& online, OverlayActions& out);
@@ -274,6 +286,8 @@ private:
     static float panelWidth(float displayW);
 
     bool        m_titlebarOverlay = false;
+    bool        m_customChrome = false;
+    bool        m_maximized = false;
     bool        m_fullscreen = false;
     const Thumbnailer* m_thumbs = nullptr;
     const std::vector<std::string>* m_recent = nullptr;

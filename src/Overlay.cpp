@@ -453,13 +453,14 @@ OverlayActions Overlay::draw(const PlayerState& st, bool fullscreen, const AirPl
     } else if (m_alpha > 0.0f) {
         m_menuOpen = false;  // set again below by whichever popup is open
         if (fullscreen) drawTitleBar(st);
-        else if (m_titlebarOverlay) drawTitleShade();
+        else if (m_titlebarOverlay || m_customChrome) drawTitleShade();
         drawControls(st, fullscreen, airplay, out);
     } else {
         m_hoveringPanel = false;
         m_menuOpen = false;
     }
 
+    if (m_customChrome && !fullscreen) drawWindowChrome(st, out);
     if (m_playlistAnim > 0.0f) drawPlaylist(st, playlist, out);
     if (m_panelAnim > 0.0f && !st.idle) drawSidePanel(st, airplay, online, out);
     if (m_resultsOpen && !st.idle) drawResultsDialog(online, out);
@@ -1089,6 +1090,64 @@ void Overlay::drawTitleShade() {
     const float a = m_alpha;
     dl->AddRectFilledMultiColor({0, 0}, {size.x, 56},
         col(0, 0, 0, 0.50f, a), col(0, 0, 0, 0.50f, a), col(0, 0, 0, 0, a), col(0, 0, 0, 0, a));
+}
+
+// Linux: the window's title and buttons, drawn by Tolga over the top of the video like the
+// macOS title bar: they fade with the controls (always there on the start screen). The
+// strip itself drags the window (SDL hit test in main.cpp).
+void Overlay::drawWindowChrome(const PlayerState& st, OverlayActions& out) {
+    const float a = st.idle ? 1.0f : m_alpha;
+    if (a <= 0.01f) return;
+    const ImVec2 size = ImGui::GetIO().DisplaySize;
+    const float h = kChromeH, bw = kChromeButtonW;
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    if (!st.idle && !st.title.empty()) {
+        const float maxW = size.x - 3 * bw - 28.0f;
+        dl->PushClipRect({14, 0}, {14 + std::max(0.0f, maxW), h}, true);
+        dl->AddText(ImGui::GetFont(), 14.0f, {14, (h - 14.0f) * 0.5f}, col(1, 1, 1, 0.88f, a), st.title.c_str());
+        dl->PopClipRect();
+    }
+
+    ImGui::SetNextWindowPos({size.x - 3 * bw, 0});
+    ImGui::SetNextWindowSize({3 * bw, h});
+    ImGui::Begin("##chrome", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
+    for (int i = 0; i < 3; ++i) {
+        const ImVec2 p0{size.x - (3 - i) * bw, 0}, p1{p0.x + bw, h};
+        ImGui::SetCursorScreenPos(p0);
+        ImGui::PushID(i);
+        const bool clicked = ImGui::InvisibleButton("##winbtn", {bw, h});
+        const bool hov = ImGui::IsItemHovered();
+        ImGui::PopID();
+        if (hov) {
+            m_hoveringPanel = true;
+            // close turns red like everywhere else; the others get a light wash
+            dl->AddRectFilled(p0, p1, i == 2 ? IM_COL32(196, 43, 28, int(255 * a)) : col(1, 1, 1, 0.12f, a));
+        }
+        const ImU32 c = i == 2 && hov ? IM_COL32(255, 255, 255, int(255 * a)) : col(1, 1, 1, 0.90f, a);
+        const ImVec2 m{(p0.x + p1.x) * 0.5f, h * 0.5f};
+        const float r = 5.0f;
+        if (i == 0) {
+            dl->AddLine({m.x - r, m.y}, {m.x + r, m.y}, c, 1.2f);
+        } else if (i == 1 && !m_maximized) {
+            dl->AddRect({m.x - r, m.y - r}, {m.x + r, m.y + r}, c, 0.0f, 0, 1.2f);
+        } else if (i == 1) {  // restore: a square with another one peeking out behind it
+            dl->AddRect({m.x - r, m.y - r + 2}, {m.x + r - 2, m.y + r}, c, 0.0f, 0, 1.2f);
+            dl->AddLine({m.x - r + 2, m.y - r + 2}, {m.x - r + 2, m.y - r}, c, 1.2f);
+            dl->AddLine({m.x - r + 2, m.y - r}, {m.x + r, m.y - r}, c, 1.2f);
+            dl->AddLine({m.x + r, m.y - r}, {m.x + r, m.y + r - 2}, c, 1.2f);
+            dl->AddLine({m.x + r, m.y + r - 2}, {m.x + r - 2, m.y + r - 2}, c, 1.2f);
+        } else {
+            dl->AddLine({m.x - r, m.y - r}, {m.x + r, m.y + r}, c, 1.2f);
+            dl->AddLine({m.x - r, m.y + r}, {m.x + r, m.y - r}, c, 1.2f);
+        }
+        if (clicked) {
+            if (i == 0) out.minimizeWindow = true;
+            if (i == 1) out.toggleMaximize = true;
+            if (i == 2) out.closeWindow = true;
+        }
+    }
+    ImGui::End();
 }
 
 // ------------------------------------------------------------- control bar

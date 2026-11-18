@@ -176,6 +176,7 @@ add_executable(tolga
   src/Overlay.cpp
   src/Ffmpeg.cpp
   src/DefaultApp.cpp
+  src/WindowChrome.cpp
   src/I18n.cpp)
 target_include_directories(tolga PRIVATE ${TOLGA_API_INCLUDE})
 
@@ -222,7 +223,7 @@ if(WIN32)
   set_source_files_properties(${CMAKE_BINARY_DIR}/tolga.rc PROPERTIES
     OBJECT_DEPENDS "${TOLGA_RC_DIR}/tolga.ico;${TOLGA_RC_DIR}/tolga.manifest")
   target_link_options(tolga PRIVATE -static-libgcc -static-libstdc++)
-  target_link_libraries(tolga PRIVATE shlwapi)   # AssocQueryString: who opens .mkv
+  target_link_libraries(tolga PRIVATE shlwapi dwmapi)   # AssocQueryString: who opens .mkv; dark title bar
 endif()
 
 if(APPLE)
