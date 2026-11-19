@@ -226,5 +226,8 @@
   "Appearance": "Apariencia",
   "System": "Sistema",
   "Dark": "Oscuro",
-  "Light": "Claro"
+  "Light": "Claro",
+  "Not on TV": "No en la TV",
+  "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} solo muestra subtítulos de texto, y este está guardado como imágenes. Busca en línea uno de texto.",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} solo muestra subtítulos de texto; los atenuados están guardados como imágenes. Busca en línea uno de texto."
 }

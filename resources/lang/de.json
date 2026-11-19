@@ -226,5 +226,8 @@
   "Appearance": "Erscheinungsbild",
   "System": "System",
   "Dark": "Dunkel",
-  "Light": "Hell"
+  "Light": "Hell",
+  "Not on TV": "Nicht auf dem TV",
+  "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} zeigt nur Text-Untertitel, und dieser ist als Bilder gespeichert. Suche online nach einem Text-Untertitel.",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} zeigt nur Text-Untertitel; die abgeblendeten sind als Bilder gespeichert. Suche online nach einem Text-Untertitel."
 }

@@ -226,5 +226,8 @@
   "Appearance": "Wygląd",
   "System": "Systemowy",
   "Dark": "Ciemny",
-  "Light": "Jasny"
+  "Light": "Jasny",
+  "Not on TV": "Nie na TV",
+  "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} wyświetla tylko napisy tekstowe, a te są zapisane jako obrazy. Wyszukaj online napisy tekstowe.",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} wyświetla tylko napisy tekstowe; przygaszone są zapisane jako obrazy. Wyszukaj online napisy tekstowe."
 }

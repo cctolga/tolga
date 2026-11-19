@@ -226,5 +226,8 @@
   "Appearance": "Aparência",
   "System": "Sistema",
   "Dark": "Escuro",
-  "Light": "Claro"
+  "Light": "Claro",
+  "Not on TV": "Não na TV",
+  "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} mostra apenas legendas em texto, e esta está gravada como imagens. Busque on-line uma legenda em texto.",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} mostra apenas legendas em texto; as esmaecidas estão gravadas como imagens. Busque on-line uma legenda em texto."
 }

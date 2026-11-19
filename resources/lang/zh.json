@@ -226,5 +226,8 @@
   "Appearance": "外观",
   "System": "跟随系统",
   "Dark": "深色",
-  "Light": "浅色"
+  "Light": "浅色",
+  "Not on TV": "电视上不可用",
+  "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} 只能显示文本字幕，而此字幕以图片形式存储。请在线搜索文本字幕。",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} 只能显示文本字幕；灰色的字幕以图片形式存储。请在线搜索文本字幕。"
 }

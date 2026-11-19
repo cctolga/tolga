@@ -226,5 +226,8 @@
   "Appearance": "外観",
   "System": "システム",
   "Dark": "ダーク",
-  "Light": "ライト"
+  "Light": "ライト",
+  "Not on TV": "TVでは不可",
+  "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} はテキスト字幕しか表示できませんが、この字幕は画像として保存されています。オンラインでテキスト字幕を検索してください。",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} はテキスト字幕しか表示できません。淡色の字幕は画像として保存されています。オンラインでテキスト字幕を検索してください。"
 }

@@ -226,5 +226,8 @@
   "Appearance": "Weergave",
   "System": "Systeem",
   "Dark": "Donker",
-  "Light": "Licht"
+  "Light": "Licht",
+  "Not on TV": "Niet op tv",
+  "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} toont alleen tekstondertitels, en deze is als afbeeldingen opgeslagen. Zoek online naar een tekstondertitel.",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} toont alleen tekstondertitels; de gedimde zijn als afbeeldingen opgeslagen. Zoek online naar een tekstondertitel."
 }

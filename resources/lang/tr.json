@@ -226,5 +226,8 @@
   "Appearance": "Görünüm",
   "System": "Sistem",
   "Dark": "Koyu",
-  "Light": "Açık"
+  "Light": "Açık",
+  "Not on TV": "TV'de yok",
+  "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; bu altyazı resim olarak saklanmış. Çevrimiçi aramayla bir metin altyazısı bulabilirsiniz.",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; soluk olanlar resim olarak saklanmış. Çevrimiçi aramayla bir metin altyazısı bulabilirsiniz."
 }

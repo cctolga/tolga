@@ -1606,8 +1606,20 @@ void iconBubble(ImDrawList* dl, ImVec2 c, ImU32 col) {
 
 // A rounded list of tracks with "<None>" on top. `selected` is the chosen track ID (-1 = none).
 // Returns true and sets `picked` when a row was clicked.
+// Subtitles kept as text, which the Apple TV can show (WebVTT); the others (PGS, DVD) are
+// pictures. The same list as the AirPlay module's.
+bool isTextSubtitle(const Track& t) {
+    if (t.external) return true;
+    std::string c = t.codec;
+    for (char& ch : c) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+    return c == "subrip" || c == "srt" || c == "mov_text" || c == "ass" || c == "ssa" || c == "webvtt" ||
+           c == "text" || c == "microdvd" || c == "subviewer" || c == "tx3g";
+}
+
+// `notHere`: rows it says yes to are dimmed and marked with `notHereLabel` (still clickable).
 bool trackList(const char* id, const std::vector<const Track*>& tracks, int64_t selected, bool withNone,
-               float width, int64_t& picked) {
+               float width, int64_t& picked, bool (*notHere)(const Track&) = nullptr,
+               const char* notHereLabel = nullptr) {
     const float rowH = 38.0f;
     const int rows = int(tracks.size()) + (withNone ? 1 : 0);
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
@@ -1638,17 +1650,20 @@ bool trackList(const char* id, const std::vector<const Track*>& tracks, int64_t 
         const float ty = a.y + (rowH - ImGui::GetTextLineHeight()) * 0.5f;
         float right = b.x - 10;
         if (t) {
-            const std::string lang = languageName(t->lang);
-            if (!lang.empty()) {
-                const ImVec2 ls = ImGui::CalcTextSize(lang.c_str());
+            const bool dim = notHere && notHere(*t);
+            auto badge = [&](const std::string& label, ImU32 fill, ImU32 ink) {
+                const ImVec2 ls = ImGui::CalcTextSize(label.c_str());
                 const ImVec2 ba{right - ls.x - 12, a.y + 8}, bb{right, b.y - 8};
-                dl->AddRectFilled(ba, bb, TC(255, 255, 255, 34), 5.0f);
-                dl->AddText({ba.x + 6, ty}, TC(255, 255, 255, 220), lang.c_str());
+                dl->AddRectFilled(ba, bb, fill, 5.0f);
+                dl->AddText({ba.x + 6, ty}, ink, label.c_str());
                 right = ba.x - 8;
-            }
+            };
+            if (dim && notHereLabel) badge(notHereLabel, TC(255, 255, 255, 16), TC(255, 255, 255, 140));
+            const std::string lang = languageName(t->lang);
+            if (!lang.empty()) badge(lang, TC(255, 255, 255, dim ? 20 : 34), TC(255, 255, 255, dim ? 120 : 220));
             const std::string text = trackText(*t);
             dl->PushClipRect({a.x + 20, a.y}, {right, b.y}, true);
-            dl->AddText({a.x + 22, ty}, TC(255, 255, 255, 240), text.c_str());
+            dl->AddText({a.x + 22, ty}, TC(255, 255, 255, dim ? 110 : 240), text.c_str());
             dl->PopClipRect();
         } else {
             dl->AddText({a.x + 22, ty}, TC(255, 255, 255, 110), T("<None>"));
@@ -2912,7 +2927,28 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
                 out.setSubVisible = true;
                 out.subVisible = !st.subVisible;
             }
-            if (trackList("##subs", subs, sid, true, inner, picked)) { out.selectSub = true; out.subId = picked; }
+            // On the Apple TV only text subtitles exist (see isTextSubtitle): picture ones are dimmed
+            const bool anyPictures = castHls && std::any_of(subs.begin(), subs.end(),
+                                                            [](const Track* t) { return !isTextSubtitle(*t); });
+            const std::string notOnTvBadge = T("Not on TV");
+            if (trackList("##subs", subs, sid, true, inner, picked,
+                          anyPictures ? +[](const Track& t) { return !isTextSubtitle(t); } : nullptr,
+                          notOnTvBadge.c_str())) {
+                out.selectSub = true;
+                out.subId = picked;
+                if (anyPictures)
+                    for (const Track* t : subs)
+                        if (t->id == picked && !isTextSubtitle(*t))
+                            showToast(TF("{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.",
+                                         {tvName}));
+            }
+            if (anyPictures) {
+                ImGui::Dummy({0, 4});
+                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + inner);
+                ImGui::TextDisabled("%s", TF("{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.",
+                                             {tvName}).c_str());
+                ImGui::PopTextWrapPos();
+            }
         });
         ImGui::Dummy({0, 18});
         section(subsOff, notOnTv.c_str(), [&] {
