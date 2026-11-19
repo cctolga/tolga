@@ -433,6 +433,7 @@ int main(int argc, char** argv) {
     OpenSubtitles online(configDir, pushWake);
     RecentFiles recent(configDir);
     // "Make Tolga Player your default video player" on the idle screen, until it is
+    defaultapp::refresh();  // Linux: a default entry left pointing at a deleted AppImage
     const bool defaultAvailable = defaultapp::available();
     bool offerDefault = defaultAvailable && !defaultapp::isDefault();
     std::string defaultNote;

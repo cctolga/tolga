@@ -53,6 +53,8 @@ bool available() { return true; }
 
 bool isDefault() { return opensWithUs(L".mkv") && opensWithUs(L".mp4"); }
 
+void refresh() {}
+
 std::string makeDefault() {
     if (!installed())
         return T("Install Tolga Player with Tolga-Player-Win.exe first: the zip version can't become the default player.");
@@ -134,6 +136,27 @@ std::string quoteExec(const std::string& s) {
     }
     return q + "\"";
 }
+
+// The program the applications-menu entry starts, as written in its Exec line ("" if none).
+std::string registeredProgram() {
+    std::ifstream f(dataHome() / "applications" / kDesktopId);
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.rfind("Exec=", 0) != 0) continue;
+        std::string prog;
+        size_t i = 5;
+        if (i < line.size() && line[i] == '"') {
+            for (++i; i < line.size() && line[i] != '"'; ++i) {
+                if (line[i] == '\\' && i + 1 < line.size()) ++i;
+                prog += line[i];
+            }
+        } else {
+            prog = line.substr(i, line.find(' ', i) == std::string::npos ? std::string::npos : line.find(' ', i) - i);
+        }
+        return prog;
+    }
+    return {};
+}
 }  // namespace
 
 bool available() { return true; }
@@ -141,8 +164,34 @@ bool available() { return true; }
 bool isDefault() {
     const std::string xdg = findProgram("xdg-mime");
     if (xdg.empty()) return false;
+    // the entry must also start something that still exists (see refresh)
+    std::error_code ec;
+    const std::string prog = registeredProgram();
+    if (prog.empty() || !fs::exists(prog, ec)) return false;
     return run({xdg, "query", "default", "video/x-matroska"}) == kDesktopId &&
            run({xdg, "query", "default", "video/mp4"}) == kDesktopId;
+}
+
+void refresh() {
+    std::error_code ec;
+    const fs::path entry = dataHome() / "applications" / kDesktopId;
+    if (!fs::exists(entry, ec)) return;  // never made the default: nothing to do
+    const std::string prog = registeredProgram();
+    if (prog.empty() || fs::exists(prog, ec)) return;  // still fine (or another copy the user keeps)
+    const std::string exe = selfPath();
+    if (exe.empty()) return;
+    std::ifstream in(entry);
+    std::string text, line;
+    while (std::getline(in, line))
+        text += (line.rfind("Exec=", 0) == 0 ? "Exec=" + quoteExec(exe) + " %F" : line) + "\n";
+    in.close();
+    {
+        std::ofstream out(entry, std::ios::trunc);
+        out << text;
+        if (!out) return;
+    }
+    if (const std::string udd = findProgram("update-desktop-database"); !udd.empty())
+        run({udd, (dataHome() / "applications").string()});
 }
 
 std::string makeDefault() {

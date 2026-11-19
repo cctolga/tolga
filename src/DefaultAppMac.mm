@@ -63,4 +63,6 @@ std::string makeDefault() {
     }
 }
 
+void refresh() {}
+
 }  // namespace defaultapp

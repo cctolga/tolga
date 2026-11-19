@@ -20,4 +20,9 @@ bool isDefault();
 // Does what the system allows and returns one short sentence for the user.
 std::string makeDefault();
 
+// At start-up. Linux: if Tolga was made the default earlier from a file that is gone (an
+// AppImage deleted after a newer one was downloaded), the entry is pointed at this copy, so
+// double-clicking videos works again. Nothing else changes; no-op elsewhere.
+void refresh();
+
 }  // namespace defaultapp
