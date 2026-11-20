@@ -229,5 +229,6 @@
   "Light": "Светлое",
   "Not on TV": "Не на ТВ",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} показывает только текстовые субтитры, а эти сохранены в виде изображений. Найдите текстовые субтитры онлайн.",
-  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} показывает только текстовые субтитры; приглушённые сохранены в виде изображений. Найдите текстовые субтитры онлайн."
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} показывает только текстовые субтитры; приглушённые сохранены в виде изображений. Найдите текстовые субтитры онлайн.",
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Версия из Microsoft Store не может использовать старые графические драйверы, такие как этот. Установщик с cctolga.github.io/tolga работает на этом компьютере."
 }

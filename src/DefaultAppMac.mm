@@ -39,6 +39,8 @@ bool opensWithUs(NSString* ext) {
 
 namespace defaultapp {
 
+bool packaged() { return false; }
+
 bool available() { return bundleId().length > 0; }
 
 bool isDefault() {

@@ -60,6 +60,16 @@ void trace(const char* fmt, ...) {
     std::fflush(g_trace);
 }
 
+// When the graphics driver can't give OpenGL 2.1. The Microsoft Store version can't run on
+// Intel graphics from before 2012 even where the installer's copy does: Windows treats a
+// packaged app as a Windows 10 one, and those old drivers refuse to load into such programs.
+std::string oldGraphicsMessage() {
+    std::string msg = T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it.");
+    if (defaultapp::packaged())
+        msg = msg + "\n\n" + T("This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.");
+    return msg;
+}
+
 std::string readTextFile(const std::string& path) {
     std::ifstream f(utf8Path(path), std::ios::binary);
     if (!f) return {};
@@ -334,7 +344,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "Could not create an OpenGL context (Tolga Player needs OpenGL 2.1 or newer):%s\n",
                      glError.c_str());
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player",
-            T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it."),
+            oldGraphicsMessage().c_str(),
             nullptr);
         return 1;
     }
@@ -352,7 +362,7 @@ int main(int argc, char** argv) {
         if (got > 0 && got < 21) {
             std::fprintf(stderr, "OpenGL %s is too old (Tolga Player needs 2.1 or newer)\n", version);
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player",
-                T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it."),
+                oldGraphicsMessage().c_str(),
                 window);
             return 1;
         }
@@ -378,7 +388,7 @@ int main(int argc, char** argv) {
     if (!player.init(getProcAddress, pushWake)) {
         // say so instead of vanishing (a windowed app on Windows has no terminal for stderr)
         trace("mpv failed: %s", player.initError().c_str());
-        const std::string msg = std::string(T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it.")) +
+        const std::string msg = oldGraphicsMessage() +
                                 "\n\n" + player.initError();
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player", msg.c_str(), window);
         return 1;
@@ -401,7 +411,7 @@ int main(int argc, char** argv) {
     if (!overlay.init(window, gl, glslVersion)) {
         trace("controls failed (%s)", glslVersion);
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tolga Player",
-            T("Tolga Player needs OpenGL 2.1 or newer, and the graphics driver of this computer doesn't provide it."),
+            oldGraphicsMessage().c_str(),
             window);
         return 1;
     }

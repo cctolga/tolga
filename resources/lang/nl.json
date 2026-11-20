@@ -229,5 +229,6 @@
   "Light": "Licht",
   "Not on TV": "Niet op tv",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} toont alleen tekstondertitels, en deze is als afbeeldingen opgeslagen. Zoek online naar een tekstondertitel.",
-  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} toont alleen tekstondertitels; de gedimde zijn als afbeeldingen opgeslagen. Zoek online naar een tekstondertitel."
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} toont alleen tekstondertitels; de gedimde zijn als afbeeldingen opgeslagen. Zoek online naar een tekstondertitel.",
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "De Microsoft Store-versie kan oudere grafische stuurprogramma's zoals dit niet gebruiken. Het installatieprogramma van cctolga.github.io/tolga werkt op deze computer."
 }

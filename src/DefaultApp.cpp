@@ -63,6 +63,8 @@ bool opensWithUs(const wchar_t* ext) {
 }
 }  // namespace
 
+bool packaged() { return !packagedAppId().empty(); }
+
 bool available() { return true; }
 
 bool isDefault() { return opensWithUs(L".mkv") && opensWithUs(L".mp4"); }
@@ -82,6 +84,8 @@ std::string makeDefault() {
 
 #else
 // ------------------------------------------------------------------ Linux
+
+bool packaged() { return false; }
 
 namespace fs = std::filesystem;
 

@@ -229,5 +229,6 @@
   "Light": "Jasny",
   "Not on TV": "Nie na TV",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} wyświetla tylko napisy tekstowe, a te są zapisane jako obrazy. Wyszukaj online napisy tekstowe.",
-  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} wyświetla tylko napisy tekstowe; przygaszone są zapisane jako obrazy. Wyszukaj online napisy tekstowe."
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} wyświetla tylko napisy tekstowe; przygaszone są zapisane jako obrazy. Wyszukaj online napisy tekstowe.",
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Wersja ze Sklepu Microsoft nie może korzystać ze starszych sterowników graficznych, takich jak ten. Instalator ze strony cctolga.github.io/tolga działa na tym komputerze."
 }

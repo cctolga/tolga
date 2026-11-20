@@ -229,5 +229,6 @@
   "Light": "Açık",
   "Not on TV": "TV'de yok",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; bu altyazı resim olarak saklanmış. Çevrimiçi aramayla bir metin altyazısı bulabilirsiniz.",
-  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; soluk olanlar resim olarak saklanmış. Çevrimiçi aramayla bir metin altyazısı bulabilirsiniz."
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; soluk olanlar resim olarak saklanmış. Çevrimiçi aramayla bir metin altyazısı bulabilirsiniz.",
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store sürümü bunun gibi eski ekran kartı sürücülerini kullanamıyor. cctolga.github.io/tolga adresindeki kurulum dosyası bu bilgisayarda çalışır."
 }

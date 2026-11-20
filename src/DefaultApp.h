@@ -11,6 +11,9 @@
 
 namespace defaultapp {
 
+// Whether this is the Microsoft Store version (an MSIX package); false elsewhere.
+bool packaged();
+
 // Whether this copy can offer it at all (macOS: only the app bundle).
 bool available();
 

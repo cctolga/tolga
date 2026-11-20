@@ -229,5 +229,6 @@
   "Light": "ライト",
   "Not on TV": "TVでは不可",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} はテキスト字幕しか表示できませんが、この字幕は画像として保存されています。オンラインでテキスト字幕を検索してください。",
-  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} はテキスト字幕しか表示できません。淡色の字幕は画像として保存されています。オンラインでテキスト字幕を検索してください。"
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} はテキスト字幕しか表示できません。淡色の字幕は画像として保存されています。オンラインでテキスト字幕を検索してください。",
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store 版は、このような古いグラフィックドライバーを使用できません。cctolga.github.io/tolga のインストーラーなら、このコンピューターで動作します。"
 }

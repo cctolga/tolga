@@ -229,5 +229,6 @@
   "Light": "Hell",
   "Not on TV": "Nicht auf dem TV",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} zeigt nur Text-Untertitel, und dieser ist als Bilder gespeichert. Suche online nach einem Text-Untertitel.",
-  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} zeigt nur Text-Untertitel; die abgeblendeten sind als Bilder gespeichert. Suche online nach einem Text-Untertitel."
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} zeigt nur Text-Untertitel; die abgeblendeten sind als Bilder gespeichert. Suche online nach einem Text-Untertitel.",
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Die Microsoft-Store-Version kann ältere Grafiktreiber wie diesen nicht nutzen. Das Installationsprogramm von cctolga.github.io/tolga funktioniert auf diesem Computer."
 }
