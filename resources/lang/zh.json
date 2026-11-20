@@ -230,5 +230,8 @@
   "Not on TV": "电视上不可用",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} 只能显示文本字幕，而此字幕以图片形式存储。请在线搜索文本字幕。",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} 只能显示文本字幕；灰色的字幕以图片形式存储。请在线搜索文本字幕。",
-  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store 版本无法使用此类旧版显卡驱动程序。请使用 cctolga.github.io/tolga 上的安装程序，它可以在这台电脑上运行。"
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store 版本无法使用此类旧版显卡驱动程序。请使用 cctolga.github.io/tolga 上的安装程序，它可以在这台电脑上运行。",
+  "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles 不登录时每天可下载 5 个字幕。使用免费账号登录后每天可下载 20 个。",
+  "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "你已用完今天的 OpenSubtitles 下载次数。24 小时内会恢复；OpenSubtitles 的 VIP 账号每天可下载 1,000 个。",
+  "Log in for more...": "登录以获取更多..."
 }

@@ -230,5 +230,8 @@
   "Not on TV": "TVでは不可",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} はテキスト字幕しか表示できませんが、この字幕は画像として保存されています。オンラインでテキスト字幕を検索してください。",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} はテキスト字幕しか表示できません。淡色の字幕は画像として保存されています。オンラインでテキスト字幕を検索してください。",
-  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store 版は、このような古いグラフィックドライバーを使用できません。cctolga.github.io/tolga のインストーラーなら、このコンピューターで動作します。"
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store 版は、このような古いグラフィックドライバーを使用できません。cctolga.github.io/tolga のインストーラーなら、このコンピューターで動作します。",
+  "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles はアカウントなしでは 1 日 5 件までダウンロードできます。無料アカウントでログインすると 1 日 20 件になります。",
+  "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "今日の OpenSubtitles のダウンロード数を使い切りました。24 時間以内に戻ります。OpenSubtitles の VIP アカウントなら 1 日 1,000 件までダウンロードできます。",
+  "Log in for more...": "ログインしてさらに..."
 }

@@ -230,5 +230,8 @@
   "Not on TV": "TV'de yok",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; bu altyazı resim olarak saklanmış. Çevrimiçi aramayla bir metin altyazısı bulabilirsiniz.",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; soluk olanlar resim olarak saklanmış. Çevrimiçi aramayla bir metin altyazısı bulabilirsiniz.",
-  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store sürümü bunun gibi eski ekran kartı sürücülerini kullanamıyor. cctolga.github.io/tolga adresindeki kurulum dosyası bu bilgisayarda çalışır."
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store sürümü bunun gibi eski ekran kartı sürücülerini kullanamıyor. cctolga.github.io/tolga adresindeki kurulum dosyası bu bilgisayarda çalışır.",
+  "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles hesapsız günde 5 indirmeye izin veriyor. Ücretsiz bir hesapla giriş yaparsanız günde 20 olur.",
+  "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "Bugünkü OpenSubtitles indirme hakkınızı kullandınız. 24 saat içinde yenilenir; OpenSubtitles'ın VIP hesabı günde 1.000 indirmeye izin verir.",
+  "Log in for more...": "Daha fazlası için giriş yapın..."
 }

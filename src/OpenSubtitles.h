@@ -45,6 +45,7 @@ struct OpenSubtitlesStatus {
     bool searching = false;           // a search (not a download) is running
     std::string message;              // status / error text for the UI
     bool error = false;
+    bool limitReached = false;        // the last download hit OpenSubtitles' daily limit
     std::vector<OnlineSubtitle> results;
     uint64_t resultsSerial = 0;       // bumps on every new search result
     std::string downloadedPath;       // set once per finished download (see takeDownloaded)

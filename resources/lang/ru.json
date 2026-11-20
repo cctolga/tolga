@@ -230,5 +230,8 @@
   "Not on TV": "Не на ТВ",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} показывает только текстовые субтитры, а эти сохранены в виде изображений. Найдите текстовые субтитры онлайн.",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} показывает только текстовые субтитры; приглушённые сохранены в виде изображений. Найдите текстовые субтитры онлайн.",
-  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Версия из Microsoft Store не может использовать старые графические драйверы, такие как этот. Установщик с cctolga.github.io/tolga работает на этом компьютере."
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Версия из Microsoft Store не может использовать старые графические драйверы, такие как этот. Установщик с cctolga.github.io/tolga работает на этом компьютере.",
+  "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles разрешает без учётной записи 5 загрузок в день. Войдите в бесплатную учётную запись, чтобы получить 20 в день.",
+  "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "Вы использовали сегодняшние загрузки OpenSubtitles. Они восстановятся в течение 24 часов; VIP-аккаунт OpenSubtitles даёт 1000 в день.",
+  "Log in for more...": "Войти, чтобы получить больше..."
 }

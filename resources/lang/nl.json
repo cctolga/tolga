@@ -230,5 +230,8 @@
   "Not on TV": "Niet op tv",
   "{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.": "{} toont alleen tekstondertitels, en deze is als afbeeldingen opgeslagen. Zoek online naar een tekstondertitel.",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.": "{} toont alleen tekstondertitels; de gedimde zijn als afbeeldingen opgeslagen. Zoek online naar een tekstondertitel.",
-  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "De Microsoft Store-versie kan oudere grafische stuurprogramma's zoals dit niet gebruiken. Het installatieprogramma van cctolga.github.io/tolga werkt op deze computer."
+  "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "De Microsoft Store-versie kan oudere grafische stuurprogramma's zoals dit niet gebruiken. Het installatieprogramma van cctolga.github.io/tolga werkt op deze computer.",
+  "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles staat zonder account 5 downloads per dag toe. Log in met een gratis account voor 20 per dag.",
+  "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "Je hebt de downloads van vandaag bij OpenSubtitles gebruikt. Ze komen binnen 24 uur terug; een VIP-account bij OpenSubtitles geeft 1.000 per dag.",
+  "Log in for more...": "Log in voor meer..."
 }

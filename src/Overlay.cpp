@@ -692,8 +692,8 @@ void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {
 // ------------------------------------------------------------- license
 
 namespace {
-// The app icon, drawn: a turquoise tile with a white screen, the play mark and the AirPlay
-// triangle (same artwork as resources/macos/icon.svg).
+// The app icon, drawn: a turquoise tile with a white screen, the play mark and cast waves on
+// both sides of it (same artwork as resources/macos/icon.svg).
 void drawAppIcon(ImDrawList* dl, ImVec2 o, float s) {
     auto P = [&](float x, float y) { return ImVec2{o.x + (x - 100.0f) / 824.0f * s, o.y + (y - 100.0f) / 824.0f * s}; };
     const ImU32 top = IM_COL32(94, 240, 220, 255), bottom = IM_COL32(15, 149, 160, 255);
@@ -712,12 +712,17 @@ void drawAppIcon(ImDrawList* dl, ImVec2 o, float s) {
         dl->AddRectFilled({o.x, y0}, {o.x + s, y1}, c, (i == 0 || i == bands - 1) ? r : 0.0f, fl);
     }
     const ImU32 white = IM_COL32(255, 255, 255, 255), teal = IM_COL32(18, 164, 170, 255), coral = IM_COL32(232, 72, 63, 255);
-    // screen (y shifted by 33 like the SVG), with the notch the AirPlay triangle rises into
-    dl->AddRectFilled(P(250, 283), P(774, 633), white, s * 0.073f);
-    const ImU32 notch = ImGui::GetColorU32(ImVec4(0.17f, 0.70f, 0.71f, 1));
-    dl->AddTriangleFilled(P(512, 521), P(612, 640), P(412, 640), notch);
-    dl->AddTriangleFilled(P(464, 352), P(602, 437), P(464, 522), teal);
-    dl->AddTriangleFilled(P(512, 593), P(630, 741), P(394, 741), coral);
+    const float k = s / 824.0f;
+    dl->AddRectFilled(P(230, 292), P(794, 712), white, 64.0f * k);
+    dl->AddTriangleFilled(P(468, 432), P(588, 502), P(468, 572), teal);
+    const ImVec2 c = P(512, 502);
+    const float a40 = 40.0f * 3.14159265f / 180.0f, pi = 3.14159265f;
+    for (const float wave : {150.0f, 210.0f}) {
+        dl->PathArcTo(c, wave * k, -a40, a40, 16);
+        dl->PathStroke(coral, 0, 30.0f * k);
+        dl->PathArcTo(c, wave * k, pi - a40, pi + a40, 16);
+        dl->PathStroke(coral, 0, 30.0f * k);
+    }
 }
 }  // namespace
 
@@ -1446,7 +1451,11 @@ void Overlay::drawAirPlayMenu(const AirPlayView& airplay, OverlayActions& out) {
     m_menuOpen = true;
     if (ImGui::IsWindowHovered()) m_hoveringPanel = true;
 
-    ImGui::TextDisabled("AIRPLAY");
+    {  // the heading centered over the list (the menu sizes itself to its widest row)
+        const float hw = ImGui::CalcTextSize("AIRPLAY").x;
+        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), (ImGui::GetWindowWidth() - hw) * 0.5f));
+        ImGui::TextDisabled("AIRPLAY");
+    }
     if (!airplay.available) {
         // built from source without the AirPlay module
         ImGui::MenuItem(T("This Computer"), nullptr, true);
@@ -2667,12 +2676,16 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
                                                               ? st->message
                                                           : (st && !st->results.empty()) ? TF("{} subtitles found.", {std::to_string(st->results.size())})
                                                           : (st ? st->message : std::string());
-    dl->AddText(ImGui::GetFont(), 24.0f, p, st && st->error ? TC(255, 140, 128, 255) : TC(255, 255, 255, 245),
-                title.c_str());
+    // the daily-limit note is two sentences: smaller and wrapped, the rest stays one big line
+    const bool longNote = st && st->limitReached;
+    const float titleSize = longNote ? 17.0f : 24.0f;
+    const float titleH = longNote ? ImGui::GetFont()->CalcTextSizeA(titleSize, FLT_MAX, inner, title.c_str()).y : 24.0f;
+    dl->AddText(ImGui::GetFont(), titleSize, p, st && st->error ? TC(255, 140, 128, 255) : TC(255, 255, 255, 245),
+                title.c_str(), nullptr, longNote ? inner : 0.0f);
     if (hasResults)
-        dl->AddText(ImGui::GetFont(), 15.0f, {p.x, p.y + 32}, TC(255, 255, 255, 110),
+        dl->AddText(ImGui::GetFont(), 15.0f, {p.x, p.y + titleH + 8}, TC(255, 255, 255, 110),
                     downloading ? T("Downloading the selected subtitle...") : T("Please click to select subtitles to download:"));
-    ImGui::SetCursorScreenPos({p.x, p.y + 58});
+    ImGui::SetCursorScreenPos({p.x, p.y + titleH + 34});
 
     // ---- refine: title + languages + search (in case the file name guess is off)
     const float searchW = ImGui::CalcTextSize(T("Search")).x + 40;
@@ -2776,9 +2789,13 @@ void Overlay::drawResultsDialog(const OnlineView& online, OverlayActions& out) {
     if (textButton(T("CANCEL"), {f.x + inner - tw - 28, f.y}, TC(255, 255, 255, 190), true, &cw) ||
         ImGui::IsKeyPressed(ImGuiKey_Escape))
         m_resultsOpen = false;
+    // After the daily limit without an account, the way out stands out: logging in gives more
+    const bool loginForMore = st && st->limitReached && online.settings && online.settings->username.empty();
+    const char* acct = loginForMore ? T("Log in for more...") : T("Account...");
     ImGui::SetCursorScreenPos({f.x - 6, f.y - 6});
-    if (ImGui::InvisibleButton("##acct", {ImGui::CalcTextSize(T("Account...")).x + 12, 30})) openAccountForm(online);
-    dl->AddText({f.x, f.y}, TC(255, 255, 255, ImGui::IsItemHovered() ? 220 : 120), T("Account..."));
+    if (ImGui::InvisibleButton("##acct", {ImGui::CalcTextSize(acct).x + 12, 30})) openAccountForm(online);
+    const bool acctHover = ImGui::IsItemHovered();
+    dl->AddText({f.x, f.y}, loginForMore ? TC(110, 165, 255, acctHover ? 255 : 220) : TC(255, 255, 255, acctHover ? 220 : 120), acct);
     ImGui::End();
 }
 

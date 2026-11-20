@@ -455,6 +455,7 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
     setStatus([&](OpenSubtitlesStatus& s) {
         s.busy = true;
         s.error = false;
+        s.limitReached = false;
         s.downloadingId = sub.fileId;
         s.message = T("Downloading...");
     });
@@ -477,9 +478,18 @@ void OpenSubtitles::download(const OnlineSubtitle& sub) {
         const Reply r = request("POST", apiBase() + "/download", json{{"file_id", sub.fileId}}.dump(), true);
         if (!r.error.empty()) return finish(false, TF("Couldn't reach OpenSubtitles: {}", {r.error}), {});
         if (r.code == 406 || r.code == 429) {
-            const std::string msg = apiMessage(r.body);
-            return finish(false, msg.empty() ? std::string(T("Daily download limit reached. Log in (Account...) for more."))
-                                             : msg, {});
+            // OpenSubtitles' daily limit: 5 downloads without an account, 20 with a free one,
+            // 1000 for VIP. Say which applies (its own message is English only and doesn't).
+            bool anonymous;
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                anonymous = m_settings.username.empty();
+            }
+            finish(false, anonymous ? T("OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.")
+                                    : T("You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day."),
+                   {});
+            setStatus([](OpenSubtitlesStatus& s) { s.limitReached = true; });
+            return;
         }
         if (r.code != 200) {
             const std::string msg = apiMessage(r.body);
