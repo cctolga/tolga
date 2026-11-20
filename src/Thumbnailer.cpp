@@ -160,6 +160,9 @@ void Thumbnailer::run(std::string path, double duration, uint64_t gen) {
             have += size_t(n);
             if (have == frameBytes) break;
         }
+        // A stopped ffmpeg never exits: if it was held after writing its picture (AirPlay
+        // started just then), the wait below would never return, and quitting would hang here.
+        if (suspended) proc.suspend(false);
         proc.wait();
         ++tried;
         if (have == frameBytes) {
