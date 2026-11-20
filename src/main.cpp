@@ -677,7 +677,9 @@ int main(int argc, char** argv) {
         chrome::tick(window, !player.state().idle);  // Linux: the video's shape after a resize
         SDL_Event e;
         const bool busy = overlay.isAnimating() || redrawFrames > 0;
-        bool gotEvent = busy ? SDL_PollEvent(&e) : SDL_WaitEventTimeout(&e, 100);
+        // the cast screen breathes (Overlay::drawCastScreen): wake up for its next frame
+        const bool castScreen = castStatus.active() && !player.state().idle;
+        bool gotEvent = busy ? SDL_PollEvent(&e) : SDL_WaitEventTimeout(&e, castScreen ? 33 : 100);
 
         bool newFrame = false;
         while (gotEvent) {
@@ -936,8 +938,10 @@ int main(int argc, char** argv) {
             }
         }
 
-        // keep the time label ticking while the TV plays (a few times per second is plenty)
-        if (castStatus.active() && SDL_GetTicks() - lastCastRedraw >= 250) {
+        // keep the time label ticking while the TV plays (a few times per second is plenty);
+        // about 30 times a second while the cast screen shows, for its animation
+        const Uint64 castEvery = player.state().idle ? 250 : 33;
+        if (castStatus.active() && SDL_GetTicks() - lastCastRedraw >= castEvery) {
             lastCastRedraw = SDL_GetTicks();
             redrawFrames = std::max(redrawFrames, 1);
         }

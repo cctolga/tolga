@@ -156,8 +156,9 @@ void roundedTriangle(ImDrawList* dl, ImVec2 a, ImVec2 b, ImVec2 c, float r, ImU3
 
 // The cast glyph (Material Symbols "cast" / "cast_connected", Apache License 2.0): a screen open
 // at the lower left, where waves rise from the corner. Drawn on its 24-unit grid; `active`
-// (sending to a TV) colours it and fills the screen, as "cast_connected" does.
-void iconCast(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
+// (sending to a TV) colours it and fills the screen, as "cast_connected" does. `waveAlpha`
+// (optional, 3 values 0..1) dims the corner dot and the two rings one by one.
+void iconCast(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active, const float* waveAlpha = nullptr) {
     const ImU32 col = active ? ImGui::GetColorU32(TV(0.18f, 0.80f, 0.76f, 1.0f)) : color;
     const float k = s / 24.0f;
     auto P = [&](float x, float y) { return ImVec2{c.x + (x - 12.0f) * k, c.y + (y - 12.0f) * k}; };
@@ -170,14 +171,20 @@ void iconCast(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
     dl->PathLineTo(P(14, 20));
     dl->PathStroke(col, 0, t);
     // waves from the corner (1, 21): a quarter dot and two rings
+    auto wave = [&](int i) {  // the colour of wave i (0 = the dot)
+        if (!waveAlpha) return col;
+        ImVec4 v = ImGui::ColorConvertU32ToFloat4(col);
+        v.w *= std::clamp(waveAlpha[i], 0.0f, 1.0f);
+        return ImGui::ColorConvertFloat4ToU32(v);
+    };
     const ImVec2 o = P(1, 21);
     dl->PathLineTo(o);
     dl->PathArcTo(o, 3.0f * k, -pi * 0.5f, 0.0f, 8);
-    dl->PathFillConvex(col);
+    dl->PathFillConvex(wave(0));
     dl->PathArcTo(o, 6.0f * k, -pi * 0.5f, 0.0f, 12);
-    dl->PathStroke(col, 0, t);
+    dl->PathStroke(wave(1), 0, t);
     dl->PathArcTo(o, 10.0f * k, -pi * 0.5f, 0.0f, 16);
-    dl->PathStroke(col, 0, t);
+    dl->PathStroke(wave(2), 0, t);
     if (active) {  // the screen filled, minus the waves' corner
         dl->PathLineTo(P(5, 7));
         dl->PathLineTo(P(19, 7));
@@ -527,10 +534,43 @@ void Overlay::drawCastScreen(const PlayerState& st, const CastStatus& cast) {
         TC(24, 26, 34, 255), TC(24, 26, 34, 255),
         TC(10, 10, 13, 255), TC(10, 10, 13, 255));
 
-    const ImVec2 c{size.x * 0.5f, size.y * 0.5f - 46.0f};
-    iconCast(bg, c, 76, TC(255, 255, 255, 215), true);
-
     using P = CastStatus::Phase;
+    const ImVec2 c{size.x * 0.5f, size.y * 0.5f - 46.0f};
+    // While the movie goes to the TV the icon breathes: it grows a little and lifts (its shadow
+    // drops and spreads), a turquoise glow swells behind it, and a pulse runs out through the
+    // waves from the corner. main.cpp redraws this screen about 30 times a second meanwhile.
+    const bool sending = cast.phase != P::Paused && cast.phase != P::Ended && cast.phase != P::NeedPin;
+    const float pi2 = 6.2831853f;
+    const float tm = float(ImGui::GetTime());
+    const float breath = sending ? 0.5f - 0.5f * std::cos(pi2 * tm / 2.4f) : 0.0f;  // 0..1..0
+    const float iconSize = 76.0f * (1.0f + 0.045f * breath);
+    const ImVec2 ic{c.x, c.y - 4.0f * breath};
+    // glow: stacked translucent discs make a soft radial gradient (no blur in ImGui)
+    const ImVec4 teal = TV(0.18f, 0.80f, 0.76f, 1.0f);
+    constexpr int kGlow = 36;
+    for (int i = 0; i < kGlow; ++i) {
+        const float f = float(i) / float(kGlow - 1);  // 0 outside .. 1 inside
+        const float r = iconSize * (1.08f - 0.70f * std::sqrt(f)) * (0.94f + 0.10f * breath);
+        // faint at the rim, so the glow fades out instead of ending in a step
+        const float a = (0.004f + 0.010f * breath + 0.010f * f) * (sending ? 1.0f : 0.6f);
+        bg->AddCircleFilled(ic, r, ImGui::GetColorU32({teal.x, teal.y, teal.z, a}), 64);
+    }
+    // shadow under the icon: softer, wider and lower while it is lifted
+    for (int i = 0; i < 8; ++i) {
+        const float f = float(i) / 7.0f;
+        const ImVec2 rad{iconSize * (0.62f - 0.30f * f) * (1.0f + 0.12f * breath), iconSize * (0.10f - 0.05f * f)};
+        bg->AddEllipseFilled({c.x, c.y + iconSize * 0.52f + 3.0f * breath}, rad, TC(0, 0, 0, int(14.0f - 6.0f * breath)), 0.0f, 32);
+    }
+    float waves[3] = {1.0f, 1.0f, 1.0f};
+    if (sending) {
+        const float p = std::fmod(tm / 1.6f, 1.0f);
+        for (int i = 0; i < 3; ++i) {
+            const float d = p - float(i) * 0.16f;
+            waves[i] = 0.30f + 0.70f * (0.5f + 0.5f * std::cos(pi2 * d));
+        }
+    }
+    iconCast(bg, ic, iconSize, TC(255, 255, 255, 215), true, waves);
+
     const int dots = int(ImGui::GetTime() * 3.0) % 4;
     std::string line;
     switch (cast.phase) {
