@@ -183,6 +183,7 @@ sed 's/^/  /' "$DEPS/versions.txt"
 cat <<EOF
   SDL3                 zlib License   https://libsdl.org
   Dear ImGui           MIT            https://github.com/ocornut/imgui
+  Material Symbols     Apache-2.0     https://github.com/google/material-design-icons (the cast icon)
   nlohmann/json        MIT            https://github.com/nlohmann/json
   MinGW-w64 runtime    ZPL / MIT      https://www.mingw-w64.org
 EOF

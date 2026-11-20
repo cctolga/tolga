@@ -154,21 +154,37 @@ void roundedTriangle(ImDrawList* dl, ImVec2 a, ImVec2 b, ImVec2 c, float r, ImU3
     dl->PathFillConvex(color);
 }
 
-// AirPlay video glyph: a rounded screen, open at the bottom, with a solid triangle rising into it.
-void iconAirPlay(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
+// The cast glyph (Material Symbols "cast" / "cast_connected", Apache License 2.0): a screen open
+// at the lower left, where waves rise from the corner. Drawn on its 24-unit grid; `active`
+// (sending to a TV) colours it and fills the screen, as "cast_connected" does.
+void iconCast(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
     const ImU32 col = active ? ImGui::GetColorU32(TV(0.18f, 0.80f, 0.76f, 1.0f)) : color;
-    const float w = s * 0.58f, top = c.y - s * 0.46f, bot = c.y + s * 0.20f;
-    const float r = s * 0.11f, t = 1.7f, gap = s * 0.30f;
-    dl->PathLineTo({c.x - gap, bot});
-    dl->PathLineTo({c.x - w + r, bot});
-    dl->PathArcTo({c.x - w + r, bot - r}, r, 3.14159265f * 0.5f, 3.14159265f, 6);
-    dl->PathArcTo({c.x - w + r, top + r}, r, 3.14159265f, 3.14159265f * 1.5f, 6);
-    dl->PathArcTo({c.x + w - r, top + r}, r, 3.14159265f * 1.5f, 3.14159265f * 2.0f, 6);
-    dl->PathArcTo({c.x + w - r, bot - r}, r, 0.0f, 3.14159265f * 0.5f, 6);
-    dl->PathLineTo({c.x + gap, bot});
+    const float k = s / 24.0f;
+    auto P = [&](float x, float y) { return ImVec2{c.x + (x - 12.0f) * k, c.y + (y - 12.0f) * k}; };
+    const float pi = 3.14159265f, t = 2.0f * k;
+    // the screen: open on the left below y 8 and at the bottom left of x 14
+    dl->PathLineTo(P(2, 8));
+    dl->PathArcTo(P(3, 5), 1.0f * k, pi, pi * 1.5f, 4);
+    dl->PathArcTo(P(21, 5), 1.0f * k, pi * 1.5f, pi * 2.0f, 4);
+    dl->PathArcTo(P(21, 19), 1.0f * k, 0.0f, pi * 0.5f, 4);
+    dl->PathLineTo(P(14, 20));
     dl->PathStroke(col, 0, t);
-    roundedTriangle(dl, {c.x, c.y - s * 0.06f}, {c.x + s * 0.36f, c.y + s * 0.47f}, {c.x - s * 0.36f, c.y + s * 0.47f},
-                    s * 0.07f, col);
+    // waves from the corner (1, 21): a quarter dot and two rings
+    const ImVec2 o = P(1, 21);
+    dl->PathLineTo(o);
+    dl->PathArcTo(o, 3.0f * k, -pi * 0.5f, 0.0f, 8);
+    dl->PathFillConvex(col);
+    dl->PathArcTo(o, 6.0f * k, -pi * 0.5f, 0.0f, 12);
+    dl->PathStroke(col, 0, t);
+    dl->PathArcTo(o, 10.0f * k, -pi * 0.5f, 0.0f, 16);
+    dl->PathStroke(col, 0, t);
+    if (active) {  // the screen filled, minus the waves' corner
+        dl->PathLineTo(P(5, 7));
+        dl->PathLineTo(P(19, 7));
+        dl->PathLineTo(P(19, 17));
+        dl->PathArcTo(o, 13.0f * k, std::atan2(-4.0f, 12.37f), std::atan2(-12.37f, 4.0f), 12);
+        dl->PathFillConcave(col);
+    }
 }
 
 void iconGear(ImDrawList* dl, ImVec2 c, float s, ImU32 color, bool active) {
@@ -512,7 +528,7 @@ void Overlay::drawCastScreen(const PlayerState& st, const CastStatus& cast) {
         TC(10, 10, 13, 255), TC(10, 10, 13, 255));
 
     const ImVec2 c{size.x * 0.5f, size.y * 0.5f - 46.0f};
-    iconAirPlay(bg, c, 76, TC(255, 255, 255, 215), true);
+    iconCast(bg, c, 76, TC(255, 255, 255, 215), true);
 
     using P = CastStatus::Phase;
     const int dots = int(ImGui::GetTime() * 3.0) % 4;
@@ -1257,7 +1273,7 @@ void Overlay::drawControls(const PlayerState& st, bool fullscreen, const AirPlay
         ImGui::OpenPopup("##airplay_menu");
         out.airplayMenuOpened = true;
     }
-    iconAirPlay(dl, apC, 20, white, !airplay.castTarget.empty());
+    iconCast(dl, apC, 20, white, !airplay.castTarget.empty());
     ImGui::SetNextWindowPos({apC.x + 14, p0.y - 8}, ImGuiCond_Always, {1.0f, 1.0f});
     drawAirPlayMenu(airplay, out);
 
