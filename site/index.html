@@ -63,6 +63,7 @@
   h2 { font-size: clamp(34px, 4.4vw, 52px); margin-bottom: 18px; }
   h3 { font-size: 22px; letter-spacing: -0.01em; margin-bottom: 6px; font-weight: 700; }
   .quiet { color: var(--mist); }
+  .features .lead { font-size: 20px; line-height: 1.5; max-width: 52ch; margin: 0 0 12px; }
 
   /* ---------- nav ---------- */
   nav { display: flex; align-items: center; gap: 28px; padding: 22px 0; }
@@ -359,7 +360,8 @@
 
 <section class="features" id="features">
   <div class="wrap">
-    <h2>A fast, light player first.</h2>
+    <h2>A simple, fast player first.</h2>
+    <p class="lead">No menus to dig through. Audio tracks, subtitles and picture settings are in one panel, a click away: everything you need to watch a movie, and nothing in the way.</p>
     <p class="quiet">Tolga Player is built on mpv and FFmpeg, the same engines as IINA. Its window and controls come from SDL and Dear ImGui, the libraries games use, and are drawn by the graphics card, so everything stays smooth. It opens at once, plays 4K with hardware decoding and is a 20 MB download. It comes in 13 languages, in light or dark. The Apple TV part is one click away.</p>
     <div class="shots">
       <figure class="grow"><a href="shots/player.webp"><img src="shots/player.webp" width="1600" height="963" loading="lazy" alt="Tolga Player playing a drone video of a mountain lake with Turkish subtitles"></a><figcaption>Playing a movie with subtitles</figcaption></figure>
