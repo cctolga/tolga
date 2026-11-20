@@ -207,7 +207,7 @@ done
 NOTICES="$SHARE/THIRD_PARTY_NOTICES.txt"
 AIRPLAY_NOTE=""
 [ -n "$HAS_AIRPLAY" ] && AIRPLAY_NOTE="
-The AirPlay module of the official app is proprietary software, (c) $(date +%Y) Tolga Çiftciçelik. It is not covered by the Apache License; its source code is not published."
+The AirPlay module of the official app is proprietary software, (c) $(date +%Y) Tolga Ç.. It is not covered by the Apache License; its source code is not published."
 {
 cat <<EOF
 Tolga Player $VERSION

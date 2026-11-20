@@ -92,7 +92,7 @@ Section "Install"
 
   WriteRegStr HKCU "${UNINST}" "DisplayName" "${APP}"
   WriteRegStr HKCU "${UNINST}" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKCU "${UNINST}" "Publisher" "Tolga Ciftcicelik"
+  WriteRegStr HKCU "${UNINST}" "Publisher" "Tolga C."
   WriteRegStr HKCU "${UNINST}" "URLInfoAbout" "https://cctolga.github.io/tolga/"
   WriteRegStr HKCU "${UNINST}" "DisplayIcon" '"$INSTDIR\${EXE}",0'
   WriteRegStr HKCU "${UNINST}" "InstallLocation" "$INSTDIR"

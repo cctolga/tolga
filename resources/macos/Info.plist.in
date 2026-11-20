@@ -15,7 +15,7 @@
     <key>LSApplicationCategoryType</key>    <string>public.app-category.video</string>
     <key>NSHighResolutionCapable</key>      <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
-    <key>NSHumanReadableCopyright</key>     <string>© @YEAR@ Tolga Çiftciçelik</string>
+    <key>NSHumanReadableCopyright</key>     <string>© @YEAR@ Tolga Ç.</string>
 
     <!-- macOS asks the user once before Tolga may look for Apple TVs on the local network -->
     <key>NSLocalNetworkUsageDescription</key>

@@ -80,3 +80,32 @@ jobs:
           done
           gh release edit "$TAG" --draft=false --latest
           echo "published $TAG"
+
+  # Microsoft Store package, made from the same program folder. Needs the repository variables
+  # MSIX_IDENTITY_NAME, MSIX_PUBLISHER and MSIX_PUBLISHER_NAME (Partner Center > Product
+  # identity); without them it is skipped. The .msix is a workflow artifact, uploaded to
+  # Partner Center by hand; it is not attached to the release.
+  msix:
+    needs: windows
+    if: vars.MSIX_IDENTITY_NAME != ''
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Tolga-Player-Win
+          path: dist
+
+      - name: MSIX
+        shell: pwsh
+        run: >
+          scripts/make-msix.ps1 -Zip dist/Tolga-Player-Win.zip
+          -IdentityName "${{ vars.MSIX_IDENTITY_NAME }}"
+          -Publisher "${{ vars.MSIX_PUBLISHER }}"
+          -PublisherName "${{ vars.MSIX_PUBLISHER_NAME }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tolga-Player-Win-msix
+          path: dist/Tolga-Player-Win.msix

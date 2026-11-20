@@ -822,7 +822,7 @@ void Overlay::drawAbout(const AirPlayView& airplay, OverlayActions& out) {
     if (!m_about.ffmpegVersion.empty()) libs += (libs.empty() ? "" : "   ") + std::string("FFmpeg ") + m_about.ffmpegVersion;
     centered(libs, ty, 12.5f, TC(255, 255, 255, 120));
     ty += 22.0f;
-    centered("\xC2\xA9 2026 Tolga \xC3\x87iftci\xC3\xA7" "elik", ty, 12.5f, TC(255, 255, 255, 120));  // © 2026 Tolga Çiftciçelik
+    centered("\xC2\xA9 2026 Tolga \xC3\x87.", ty, 12.5f, TC(255, 255, 255, 120));  // © 2026 Tolga Ç.
     ty += 22.0f;
     if (const LicenseInfo* lic = airplay.license) {
         std::string line;

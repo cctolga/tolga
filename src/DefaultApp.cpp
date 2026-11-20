@@ -29,9 +29,23 @@ namespace defaultapp {
 // ------------------------------------------------------------------ Windows
 
 namespace {
+// The Microsoft Store version (MSIX): its manifest declares the video types, and Windows
+// knows it by its app id (AUMID) instead of a registry entry. Empty when not packaged.
+std::wstring packagedAppId() {
+    using Fn = LONG(WINAPI*)(UINT32*, PWSTR);
+    static const Fn fn = reinterpret_cast<Fn>(
+        GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetCurrentApplicationUserModelId"));
+    if (!fn) return {};
+    wchar_t id[256];
+    UINT32 n = 256;
+    if (fn(&n, id) != ERROR_SUCCESS) return {};  // APPMODEL_ERROR_NO_APPLICATION: not packaged
+    return id;
+}
+
 // The installer registers this ProgID and "Tolga Player" under RegisteredApplications;
 // the zip version has neither, and Windows can't offer it as a default app.
 bool installed() {
+    if (!packagedAppId().empty()) return true;
     HKEY key = nullptr;
     if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\RegisteredApplications", 0, KEY_READ, &key) != ERROR_SUCCESS)
         return false;
@@ -59,8 +73,10 @@ std::string makeDefault() {
     if (!installed())
         return T("Install Tolga Player with Tolga-Player-Win.exe first: the zip version can't become the default player.");
     // Windows 11 opens the page of this app; Windows 10 opens the general Default apps page
-    ShellExecuteW(nullptr, L"open", L"ms-settings:defaultapps?registeredAppUser=Tolga%20Player", nullptr, nullptr,
-                  SW_SHOWNORMAL);
+    const std::wstring appId = packagedAppId();
+    const std::wstring page = appId.empty() ? L"ms-settings:defaultapps?registeredAppUser=Tolga%20Player"
+                                            : L"ms-settings:defaultapps?registeredAUMID=" + appId;
+    ShellExecuteW(nullptr, L"open", page.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     return T("In the Settings window that opened, choose Tolga Player for .mkv, .mp4 and the other video types.");
 }
 
