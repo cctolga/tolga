@@ -369,7 +369,7 @@ int main(int argc, char** argv) {
         if (got > 0 && got < 30) glslVersion = "#version 120";
         else if (got > 0 && got < 32 && std::strcmp(glslVersion, "#version 150") == 0) glslVersion = "#version 130";
     }
-    chrome::setup(window, Overlay::kChromeH, 3 * Overlay::kChromeButtonW);
+    chrome::setup(window, Overlay::kChromeH, 3 * Overlay::kChromeButtonW + 4);  // + the gap at the right edge
     SDL_GL_SetSwapInterval(1);  // vsync
     trace("window + OpenGL context ready (%s)", glslVersion);
     SDL_SetWindowMinimumSize(window, 480, 270);

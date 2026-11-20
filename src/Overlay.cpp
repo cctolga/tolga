@@ -1201,44 +1201,46 @@ void Overlay::drawWindowChrome(const PlayerState& st, OverlayActions& out) {
     const float h = kChromeH, bw = kChromeButtonW;
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     if (!st.idle && !st.title.empty()) {
-        const float maxW = size.x - 3 * bw - 28.0f;
+        const float maxW = size.x - 3 * bw - 32.0f;
         dl->PushClipRect({14, 0}, {14 + std::max(0.0f, maxW), h}, true);
         dl->AddText(ImGui::GetFont(), 14.0f, {14, (h - 14.0f) * 0.5f}, col(1, 1, 1, 0.88f, a), st.title.c_str());
         dl->PopClipRect();
     }
 
-    ImGui::SetNextWindowPos({size.x - 3 * bw, 0});
+    ImGui::SetNextWindowPos({size.x - 3 * bw - 4.0f, 0});
     ImGui::SetNextWindowSize({3 * bw, h});
     ImGui::Begin("##chrome", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
+    // Like GNOME / Ubuntu (Yaru): grey round buttons with thin symbolic icons; close is no
+    // different from the others, hovering and pressing only brighten the circle.
     for (int i = 0; i < 3; ++i) {
-        const ImVec2 p0{size.x - (3 - i) * bw, 0}, p1{p0.x + bw, h};
+        const ImVec2 p0{size.x - (3 - i) * bw - 4.0f, 0}, p1{p0.x + bw, h};
         ImGui::SetCursorScreenPos(p0);
         ImGui::PushID(i);
         const bool clicked = ImGui::InvisibleButton("##winbtn", {bw, h});
         const bool hov = ImGui::IsItemHovered();
+        const bool held = ImGui::IsItemActive();
         ImGui::PopID();
-        if (hov) {
-            m_hoveringPanel = true;
-            // close turns red like everywhere else; the others get a light wash
-            dl->AddRectFilled(p0, p1, i == 2 ? IM_COL32(196, 43, 28, int(255 * a)) : col(1, 1, 1, 0.12f, a));
-        }
-        const ImU32 c = i == 2 && hov ? IM_COL32(255, 255, 255, int(255 * a)) : col(1, 1, 1, 0.90f, a);
+        if (hov) m_hoveringPanel = true;
         const ImVec2 m{(p0.x + p1.x) * 0.5f, h * 0.5f};
-        const float r = 5.0f;
+        dl->AddCircleFilled(m, 12.0f, col(1, 1, 1, held ? 0.34f : hov ? 0.26f : 0.16f, a), 32);
+        const ImU32 c = col(1, 1, 1, 0.95f, a);
+        const float r = 4.5f, t = 1.6f;
         if (i == 0) {
-            dl->AddLine({m.x - r, m.y}, {m.x + r, m.y}, c, 1.2f);
+            dl->AddLine({m.x - r, m.y + 0.5f}, {m.x + r, m.y + 0.5f}, c, t);
         } else if (i == 1 && !m_maximized) {
-            dl->AddRect({m.x - r, m.y - r}, {m.x + r, m.y + r}, c, 0.0f, 0, 1.2f);
-        } else if (i == 1) {  // restore: a square with another one peeking out behind it
-            dl->AddRect({m.x - r, m.y - r + 2}, {m.x + r - 2, m.y + r}, c, 0.0f, 0, 1.2f);
-            dl->AddLine({m.x - r + 2, m.y - r + 2}, {m.x - r + 2, m.y - r}, c, 1.2f);
-            dl->AddLine({m.x - r + 2, m.y - r}, {m.x + r, m.y - r}, c, 1.2f);
-            dl->AddLine({m.x + r, m.y - r}, {m.x + r, m.y + r - 2}, c, 1.2f);
-            dl->AddLine({m.x + r, m.y + r - 2}, {m.x + r - 2, m.y + r - 2}, c, 1.2f);
+            dl->AddRect({m.x - r, m.y - r}, {m.x + r, m.y + r}, c, 1.5f, 0, t);
+        } else if (i == 1) {  // restore: a smaller square with another one peeking out behind it
+            dl->AddRect({m.x - r, m.y - r + 2.5f}, {m.x + r - 2.5f, m.y + r}, c, 1.2f, 0, t);
+            dl->PathLineTo({m.x - r + 2.5f, m.y - r + 2.5f});
+            dl->PathLineTo({m.x - r + 2.5f, m.y - r});
+            dl->PathLineTo({m.x + r, m.y - r});
+            dl->PathLineTo({m.x + r, m.y + r - 2.5f});
+            dl->PathLineTo({m.x + r - 2.5f, m.y + r - 2.5f});
+            dl->PathStroke(c, 0, t);
         } else {
-            dl->AddLine({m.x - r, m.y - r}, {m.x + r, m.y + r}, c, 1.2f);
-            dl->AddLine({m.x - r, m.y + r}, {m.x + r, m.y - r}, c, 1.2f);
+            dl->AddLine({m.x - r, m.y - r}, {m.x + r, m.y + r}, c, t);
+            dl->AddLine({m.x - r, m.y + r}, {m.x + r, m.y - r}, c, t);
         }
         if (clicked) {
             if (i == 0) out.minimizeWindow = true;

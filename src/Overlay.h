@@ -159,8 +159,8 @@ public:
     // Linux: the window has no system frame; Tolga draws the title, the window buttons and
     // leaves the top strip for dragging (see chromeHeight / chromeButtonsWidth).
     void setCustomChrome(bool on, bool maximized) { m_customChrome = on; m_maximized = maximized; }
-    static constexpr float kChromeH = 32.0f;          // in UI units, like everything here
-    static constexpr float kChromeButtonW = 46.0f;
+    static constexpr float kChromeH = 36.0f;          // in UI units, like everything here
+    static constexpr float kChromeButtonW = 34.0f;    // one round button and the gap after it (GNOME style)
     float controlsAlpha() const { return m_alpha; }
     // Seek-bar previews come from here (may be null).
     void setThumbnails(const Thumbnailer* thumbs) { m_thumbs = thumbs; }
