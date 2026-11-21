@@ -601,6 +601,11 @@ void Overlay::drawCastScreen(const PlayerState& st, const CastStatus& cast) {
         ImVec2 tw = font->CalcTextSizeA(ts, FLT_MAX, 0, st.title.c_str());
         bg->AddText(font, ts, {c.x - tw.x * 0.5f, c.y + 84}, TC(255, 255, 255, 120), st.title.c_str());
     }
+    if (!cast.notice.empty()) {  // e.g. "This TV can't show HDR: ..." (stays while casting)
+        const float ns = 14.0f;
+        ImVec2 nw = font->CalcTextSizeA(ns, FLT_MAX, 0, cast.notice.c_str());
+        bg->AddText(font, ns, {c.x - nw.x * 0.5f, c.y + 112}, TC(255, 214, 130, 200), cast.notice.c_str());
+    }
 }
 
 void Overlay::drawPinDialog(const CastStatus& cast, OverlayActions& out) {

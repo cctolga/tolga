@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-#define TOLGA_AIRPLAY_API_VERSION 1
+#define TOLGA_AIRPLAY_API_VERSION 2
 
 // An AirPlay receiver on the local network, as the menu shows it.
 struct AirPlayTarget {
@@ -57,6 +57,7 @@ struct CastStatus {
     double      position = 0.0;  // seconds, extrapolated to "now" while playing
     double      duration = 0.0;
     std::string error;
+    std::string notice;  // while casting: something the user should know (e.g. HDR converted to SDR)
     bool        pinRejected = false;  // NeedPin again after a wrong PIN
     double      progress = 0.0;       // Preparing: 0..1
 

@@ -482,6 +482,7 @@ int main(int argc, char** argv) {
     std::map<std::string, float> watched;  // how far each file was watched this session (0..1)
     CastStatus castStatus;
     CastStatus::Phase lastCastPhase = CastStatus::Phase::Idle;
+    std::string lastCastNotice;
     uint64_t lastCastRedraw = 0;
 
     // Track bookkeeping while casting: which tracks the cast was started with (a new
@@ -878,6 +879,10 @@ int main(int argc, char** argv) {
 
         // ---- casting status (updated from the network thread, polled here)
         castStatus = airplay->status();
+        if (castStatus.notice != lastCastNotice) {
+            if (!castStatus.notice.empty()) overlay.showToast(castStatus.notice);
+            lastCastNotice = castStatus.notice;
+        }
         if (castStatus.phase != lastCastPhase) {
             using P = CastStatus::Phase;
             if (castStatus.phase == P::Failed) {
