@@ -495,6 +495,7 @@ int main(int argc, char** argv) {
     uint64_t subDelayChangedAt = 0;
     int64_t  castSentAudio = -1, castSentSub = -1;
     uint64_t castSeenSerial = 0;
+    Uint64   castMirrorUntil = 0;  // a selection from the TV is being applied here (see below)
 
     // Starts casting what is loaded locally, from the current position.
     // startAt < 0: from where the local player is
@@ -538,6 +539,8 @@ int main(int argc, char** argv) {
             castSentSub = selectedTrack(st, "sub");
             castSeenSerial = 0;
             castPath = st.path;
+            std::fprintf(stderr, "[sync] cast starts with audio %lld sub %lld (visible %d)\n", (long long)castSentAudio,
+                         (long long)castSentSub, int(st.subVisible));
             airplay->startCast(d.deviceId, st.path, startAt >= 0 ? startAt : st.timePos, st.duration, tracks, st.subDelay);
             return;
         }
@@ -546,6 +549,11 @@ int main(int argc, char** argv) {
     auto stopCast = [&](bool resume) {
         if (!castStatus.active() && castTarget.empty()) return;
         const double pos = airplay->stopCast();
+        {
+            const PlayerState& pst = player.state();
+            std::fprintf(stderr, "[sync] back to this computer: sub %lld (visible %d)\n",
+                         (long long)selectedTrack(pst, "sub"), int(pst.subVisible));
+        }
         castTarget.clear();
         castStatus = CastStatus{};
         if (!player.state().idle) {
@@ -966,19 +974,51 @@ int main(int argc, char** argv) {
             } else if (castStatus.hls && live) {
                 if (castStatus.selectionSerial != castSeenSerial) {
                     // the TV reports its tracks (e.g. changed with the Siri remote): mirror them here
+                    const bool firstReport = castSeenSerial == 0;
                     castSeenSerial = castStatus.selectionSerial;
                     castSentAudio = castStatus.tvAudio;
-                    castSentSub = castStatus.tvSub;
+                    // The TV's first report after the start: the Apple TV picks subtitles by its own
+                    // settings and languages, not always the one marked as the default (e.g. not
+                    // a downloaded Turkish one). The subtitle chosen here wins: sent to the TV
+                    // instead of being turned off here. (The sound stays the TV's: the module may
+                    // have sent Dolby Digital Plus first instead of TrueHD / DTS.)
+                    const bool keepSub = firstReport && castStatus.tvSub != castSentSub;
+                    if (keepSub) {
+                        std::fprintf(stderr, "[sync] the TV started with sub %lld, sending sub %lld chosen here\n",
+                                     (long long)castStatus.tvSub, (long long)castSentSub);
+                        airplay->selectSubtitle(castSentSub);
+                    } else {
+                        castSentSub = castStatus.tvSub;
+                    }
+                    // mpv takes a moment to switch: until it has, the old tracks it still reports
+                    // must not be sent back to the TV as if the user had picked them (that sent
+                    // the TV back and forth, and could leave the subtitle off on one side)
+                    castMirrorUntil = SDL_GetTicks() + 2000;
+                    std::fprintf(stderr, "[sync] TV has audio %lld sub %lld; here audio %lld sub %lld (visible %d)\n",
+                                 (long long)castStatus.tvAudio, (long long)castStatus.tvSub,
+                                 (long long)selectedTrack(pst, "audio"), (long long)selectedTrack(pst, "sub"), int(pst.subVisible));
                     if (castStatus.tvAudio >= 0 && castStatus.tvAudio != selectedTrack(pst, "audio"))
                         player.selectAudio(castStatus.tvAudio);
-                    if (castStatus.tvSub != selectedTrack(pst, "sub")) {
+                    if (!keepSub && castStatus.tvSub != selectedTrack(pst, "sub")) {
                         player.selectSubtitle(castStatus.tvSub);
                         if (castStatus.tvSub >= 0 && !pst.subVisible) player.setSubVisibility(true);
                     }
                 } else {
                     const int64_t aid = selectedTrack(pst, "audio"), sid = selectedTrack(pst, "sub");
-                    if (aid != castSentAudio && aid >= 0) { airplay->selectAudio(aid); castSentAudio = aid; }
-                    if (sid != castSentSub)               { airplay->selectSubtitle(sid); castSentSub = sid; }
+                    const bool caughtUp = (aid == castSentAudio || castSentAudio < 0) && sid == castSentSub;
+                    if (caughtUp) castMirrorUntil = 0;
+                    if (SDL_GetTicks() >= castMirrorUntil) {
+                        if (aid != castSentAudio && aid >= 0) {
+                            std::fprintf(stderr, "[sync] audio %lld picked here -> TV\n", (long long)aid);
+                            airplay->selectAudio(aid);
+                            castSentAudio = aid;
+                        }
+                        if (sid != castSentSub) {
+                            std::fprintf(stderr, "[sync] sub %lld picked here -> TV\n", (long long)sid);
+                            airplay->selectSubtitle(sid);
+                            castSentSub = sid;
+                        }
+                    }
                 }
             }
         }
