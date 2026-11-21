@@ -237,5 +237,6 @@
   "This TV can't show HDR, so the video is converted to SDR for it.": "Dieser Fernseher kann kein HDR anzeigen, daher wird das Video für ihn in SDR umgewandelt.",
   "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "Dieser Computer ist nicht schnell genug, um dieses HDR-Video für den Fernseher in SDR umzuwandeln. Um HDR-Filme ohne Umwandlung anzusehen, muss der Fernseher HDR anzeigen können.",
   "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "Dieses Video ist in Dolby Vision Profil 5 und braucht einen Fernseher, der HDR oder Dolby Vision anzeigt. Der Fernseher an diesem Apple TV kann das nicht.",
-  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Dieser Fernseher kann kein HDR anzeigen, und dieser Computer kann HDR-Videos nicht für ihn in SDR umwandeln. Um HDR-Filme anzusehen, muss der Fernseher HDR anzeigen können."
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Dieser Fernseher kann kein HDR anzeigen, und dieser Computer kann HDR-Videos nicht für ihn in SDR umwandeln. Um HDR-Filme anzusehen, muss der Fernseher HDR anzeigen können.",
+  "Continuing from {}, where you left off.": "Weiter ab {}, wo Sie aufgehört haben."
 }

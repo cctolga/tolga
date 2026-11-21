@@ -237,5 +237,6 @@
   "This TV can't show HDR, so the video is converted to SDR for it.": "此电视无法显示 HDR，因此视频会先转换为 SDR 再发送给它。",
   "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "此电脑速度不够，无法为电视将此 HDR 视频转换为 SDR。要不经转换观看 HDR 影片，电视需要支持 HDR。",
   "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "此视频为 Dolby Vision 配置文件 5，需要能显示 HDR 或 Dolby Vision 的电视。此 Apple TV 连接的电视不支持。",
-  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "此电视无法显示 HDR，而此电脑无法为它将 HDR 视频转换为 SDR。要观看 HDR 影片，电视需要支持 HDR。"
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "此电视无法显示 HDR，而此电脑无法为它将 HDR 视频转换为 SDR。要观看 HDR 影片，电视需要支持 HDR。",
+  "Continuing from {}, where you left off.": "从上次停下的 {} 处继续播放。"
 }

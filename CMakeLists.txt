@@ -172,6 +172,7 @@ add_executable(tolga
   src/DurationCache.cpp
   src/Thumbnailer.cpp
   src/RecentFiles.cpp
+  src/ResumePositions.cpp
   src/MpvPlayer.cpp
   src/Overlay.cpp
   src/Ffmpeg.cpp

@@ -7,6 +7,7 @@
 #include "DurationCache.h"
 #include "Thumbnailer.h"
 #include "RecentFiles.h"
+#include "ResumePositions.h"
 #include "MacWindow.h"
 #include "WindowChrome.h"
 
@@ -442,6 +443,8 @@ int main(int argc, char** argv) {
 
     OpenSubtitles online(configDir, pushWake);
     RecentFiles recent(configDir);
+    ResumePositions positions(configDir);  // where each video was left
+    std::string castPath;                  // the file the TV was given (its position is the TV's)
     // "Make Tolga Player your default video player" on the idle screen, until it is
     defaultapp::refresh();  // Linux: a default entry left pointing at a deleted AppImage
     const bool defaultAvailable = defaultapp::available();
@@ -534,6 +537,7 @@ int main(int argc, char** argv) {
             castSentAudio = selectedTrack(st, "audio");
             castSentSub = selectedTrack(st, "sub");
             castSeenSerial = 0;
+            castPath = st.path;
             airplay->startCast(d.deviceId, st.path, startAt >= 0 ? startAt : st.timePos, st.duration, tracks, st.subDelay);
             return;
         }
@@ -709,11 +713,27 @@ int main(int argc, char** argv) {
                 if (!player.processEvents(fileLoaded)) running = false;
                 if (player.hasNewFrame()) newFrame = true;
                 const PlayerState& st = player.state();
+                // opened before: continue where it was left
+                double resumeAt = -1;
+                if (fileLoaded) {
+                    resumeAt = positions.get(st.path);
+                    if (resumeAt > 0 && (st.duration <= 0 || resumeAt < st.duration - 5)) {
+                        player.seekAbsolute(resumeAt, true);
+                        int t = int(resumeAt);
+                        char at[32];
+                        if (t >= 3600) std::snprintf(at, sizeof at, "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60);
+                        else           std::snprintf(at, sizeof at, "%d:%02d", t / 60, t % 60);
+                        overlay.showToast(TF("Continuing from {}, where you left off.", {at}));
+                    } else {
+                        resumeAt = -1;
+                    }
+                }
                 if (fileLoaded && !castTarget.empty()) {
-                    // a new file was opened while casting: send it to the TV too
+                    // a new file was opened while casting: send it to the TV too (from where
+                    // it was left: the jump above hasn't landed yet)
                     const std::string target = castTarget;
                     player.setPause(true);
-                    startCast(target);
+                    startCast(target, resumeAt);
                 }
                 if (fileLoaded) {
                     trace("mpv: file loaded");
@@ -884,6 +904,11 @@ int main(int argc, char** argv) {
 
         // ---- casting status (updated from the network thread, polled here)
         castStatus = airplay->status();
+        // where the video is now (on the TV while casting), to continue from there next time
+        if (const PlayerState& pst = player.state(); !pst.idle && pst.duration > 0) {
+            if (!castStatus.active()) positions.update(pst.path, pst.timePos, pst.duration);
+            else if (pst.path == castPath) positions.update(pst.path, castStatus.position, pst.duration);
+        }
         if (castStatus.notice != lastCastNotice) {
             if (!castStatus.notice.empty()) overlay.showToast(T(castStatus.notice.c_str()));
             lastCastNotice = castStatus.notice;
@@ -1099,6 +1124,7 @@ int main(int argc, char** argv) {
     }
 
     SDL_RemoveEventWatch(liveResizeWatch, &liveDraw);
+    positions.flush();
     airplay->shutdown();
     overlay.shutdown();
     player.shutdown();  // needs the GL context still alive

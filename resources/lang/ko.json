@@ -237,5 +237,6 @@
   "This TV can't show HDR, so the video is converted to SDR for it.": "이 TV는 HDR을 표시할 수 없어 비디오를 SDR로 변환하여 보냅니다.",
   "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "이 컴퓨터는 이 HDR 비디오를 TV용 SDR로 변환할 만큼 빠르지 않습니다. HDR 영화를 변환 없이 보려면 HDR을 지원하는 TV가 필요합니다.",
   "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "이 비디오는 Dolby Vision 프로필 5이므로 HDR 또는 Dolby Vision을 지원하는 TV가 필요합니다. 이 Apple TV에 연결된 TV는 지원하지 않습니다.",
-  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "이 TV는 HDR을 표시할 수 없고, 이 컴퓨터에는 HDR 비디오를 TV용 SDR로 변환할 방법이 없습니다. HDR 영화를 보려면 HDR을 지원하는 TV가 필요합니다."
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "이 TV는 HDR을 표시할 수 없고, 이 컴퓨터에는 HDR 비디오를 TV용 SDR로 변환할 방법이 없습니다. HDR 영화를 보려면 HDR을 지원하는 TV가 필요합니다.",
+  "Continuing from {}, where you left off.": "지난번에 멈춘 {}부터 이어서 재생합니다."
 }
