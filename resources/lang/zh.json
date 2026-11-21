@@ -233,5 +233,9 @@
   "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Microsoft Store 版本无法使用此类旧版显卡驱动程序。请使用 cctolga.github.io/tolga 上的安装程序，它可以在这台电脑上运行。",
   "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles 不登录时每天可下载 5 个字幕。使用免费账号登录后每天可下载 20 个。",
   "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "你已用完今天的 OpenSubtitles 下载次数。24 小时内会恢复；OpenSubtitles 的 VIP 账号每天可下载 1,000 个。",
-  "Log in for more...": "登录以获取更多..."
+  "Log in for more...": "登录以获取更多...",
+  "This TV can't show HDR, so the video is converted to SDR for it.": "此电视无法显示 HDR，因此视频会先转换为 SDR 再发送给它。",
+  "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "此电脑速度不够，无法为电视将此 HDR 视频转换为 SDR。要不经转换观看 HDR 影片，电视需要支持 HDR。",
+  "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "此视频为 Dolby Vision 配置文件 5，需要能显示 HDR 或 Dolby Vision 的电视。此 Apple TV 连接的电视不支持。",
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "此电视无法显示 HDR，而此电脑无法为它将 HDR 视频转换为 SDR。要观看 HDR 影片，电视需要支持 HDR。"
 }

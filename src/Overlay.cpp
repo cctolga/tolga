@@ -522,7 +522,8 @@ void Overlay::togglePanel(PanelTab tab) {
 
 void Overlay::showToast(const std::string& text) {
     m_toast = text;
-    m_toastUntil = SDL_GetTicks() + 5000;
+    // long messages (a reason with what to do) stay longer: about 15 characters a second
+    m_toastUntil = SDL_GetTicks() + std::clamp<uint64_t>(uint64_t(text.size()) * 65, 5000, 14000);
 }
 
 // ------------------------------------------------------------- casting
@@ -601,10 +602,18 @@ void Overlay::drawCastScreen(const PlayerState& st, const CastStatus& cast) {
         ImVec2 tw = font->CalcTextSizeA(ts, FLT_MAX, 0, st.title.c_str());
         bg->AddText(font, ts, {c.x - tw.x * 0.5f, c.y + 84}, TC(255, 255, 255, 120), st.title.c_str());
     }
-    if (!cast.notice.empty()) {  // e.g. "This TV can't show HDR: ..." (stays while casting)
-        const float ns = 14.0f;
-        ImVec2 nw = font->CalcTextSizeA(ns, FLT_MAX, 0, cast.notice.c_str());
-        bg->AddText(font, ns, {c.x - nw.x * 0.5f, c.y + 112}, TC(255, 214, 130, 200), cast.notice.c_str());
+    if (!cast.notice.empty()) {
+        // e.g. the TV can't show HDR, so the video is converted: a framed note that stays
+        // under the title for the whole cast
+        const char* text = T(cast.notice.c_str());
+        const float ns = 18.0f, padX = 18.0f, padY = 12.0f;
+        const float wrap = std::min(560.0f, size.x - 80.0f);
+        const ImVec2 tsz = font->CalcTextSizeA(ns, FLT_MAX, wrap, text);
+        const ImVec2 b0{c.x - tsz.x * 0.5f - padX, c.y + 116};
+        const ImVec2 b1{c.x + tsz.x * 0.5f + padX, b0.y + tsz.y + padY * 2};
+        bg->AddRectFilled(b0, b1, TC(255, 176, 64, 46), 10.0f);
+        bg->AddRect(b0, b1, TC(255, 190, 90, 150), 10.0f, 0, 1.5f);
+        bg->AddText(font, ns, {b0.x + padX, b0.y + padY}, TC(255, 222, 160, 245), text, nullptr, wrap);
     }
 }
 

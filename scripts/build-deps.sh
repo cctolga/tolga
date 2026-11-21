@@ -9,10 +9,10 @@
 #            softwareupdate --install-rosetta):  TOLGA_ARCH=x86_64 scripts/build-deps.sh
 #          Linux (Debian/Ubuntu): apt install meson ninja-build nasm pkg-config cmake libva-dev libdrm-dev
 #            libasound2-dev libpulse-dev
-#            libfontconfig-dev
+#            libfontconfig-dev autoconf automake libtool
 #          Windows: in an MSYS2 UCRT64 shell (pacman -S mingw-w64-ucrt-x86_64-{toolchain,meson,ninja,nasm,
-#            pkgconf,cmake} make git), or cross from Linux with TOLGA_TARGET=windows
-#            (apt install g++-mingw-w64-x86-64-posix mingw-w64-tools meson ninja-build nasm cmake)
+#            pkgconf,cmake,autotools} make git), or cross from Linux with TOLGA_TARGET=windows
+#            (apt install g++-mingw-w64-x86-64-posix mingw-w64-tools meson ninja-build nasm cmake autoconf automake libtool)
 # Output:  deps/<os>-<arch>/prefix/{lib,include,bin}, deps/<os>-<arch>/licenses/, versions.txt
 #
 # Every library is built as a shared library, so each LGPL part can be replaced by the user.
@@ -31,6 +31,7 @@ UCHARDET_VER=0.0.8
 OPENSSL_VER=3.5.9
 NVCODEC_TAG=n13.0.19.0
 CURL_TAG=curl-8_23_0
+ZIMG_VER=3.0.6
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -303,6 +304,26 @@ if [ "$OS" = linux ] || [ "$OS" = windows ]; then
     done_mark nvcodec || { log nv-codec-headers; make -C "$SRC/nv-codec-headers" PREFIX="$PREFIX" install && mark nvcodec; }
 fi
 
+# ---------------------------------------------------------------- zimg (WTFPL), Linux and Windows, static
+# Colour conversion and tone mapping for FFmpeg's zscale filter: an HDR video is converted to
+# SDR for an Apple TV whose screen can't show HDR (the Mac does this with VideoToolbox).
+if [ "$OS" = linux ] || [ "$OS" = windows ]; then
+    fetch_git zimg https://github.com/sekrit-twc/zimg.git "release-$ZIMG_VER" --recursive
+    version zimg "$ZIMG_VER" "WTFPL (static)  https://github.com/sekrit-twc/zimg"
+    if ! done_mark zimg; then
+        log zimg
+        ZIMG_HOST=()
+        [ -n "$CROSS" ] && ZIMG_HOST=(--host="$CROSS")
+        (cd "$SRC/zimg" && { make distclean >/dev/null 2>&1 || true; } && ./autogen.sh &&
+         ./configure --prefix="$PREFIX" --libdir="$PREFIX/lib" --enable-static --disable-shared --with-pic \
+                     STL_LIBS="-lstdc++ -lm" \
+                     ${ZIMG_HOST[@]+"${ZIMG_HOST[@]}"} &&
+         make -j"$JOBS" && make install)
+        mark zimg
+    fi
+    license zimg "$SRC/zimg/COPYING"
+fi
+
 # ---------------------------------------------------------------- FFmpeg (LGPL-2.1 build)
 fetch_git ffmpeg https://github.com/FFmpeg/FFmpeg.git "n$FFMPEG_VER"
 version ffmpeg "$FFMPEG_VER" "LGPL-2.1+ (built without --enable-gpl/--enable-nonfree)  https://ffmpeg.org"
@@ -314,8 +335,11 @@ if ! done_mark ffmpeg; then
     [ "$OS" = windows ] || FF_OPTS+=(--enable-zlib --enable-iconv --enable-pthreads)
     if [ "$OS" = windows ]; then
         # D3D11/DXVA2 (any GPU) and NVDEC copy-back decoding, TLS from Windows (Schannel)
+        # Media Foundation: Windows' own H.264 encoder (on the GPU where there is one), for HDR
+        # videos converted to SDR; zimg: the tone mapping for that (zscale)
         FF_OPTS+=(--target-os=mingw32 --arch=x86_64 --enable-w32threads --enable-d3d11va --enable-dxva2
-                  --enable-ffnvcodec --enable-nvdec --enable-schannel --pkg-config-flags=--static)
+                  --enable-ffnvcodec --enable-nvdec --enable-schannel --enable-mediafoundation --enable-libzimg
+                  --pkg-config-flags=--static)
         [ -n "$CROSS" ] && FF_OPTS+=(--cross-prefix="$CROSS-" --cc="$CC" --cxx="$CXX" --pkg-config=pkg-config --enable-cross-compile)
     elif [ "$OS" = darwin ]; then
         FF_OPTS+=(--enable-videotoolbox --enable-audiotoolbox --enable-securetransport
@@ -328,8 +352,9 @@ if ! done_mark ffmpeg; then
                                          --objcc="clang -arch $ARCH" --pkg-config=pkg-config)
     else
         # VA-API (Intel/AMD), NVDEC (NVIDIA, loaded at run time), TLS from the static OpenSSL above
+        # (VA-API also encodes H.264 on Intel/AMD: HDR videos converted to SDR, tone mapped by zimg)
         FF_OPTS+=(--enable-rpath --enable-vaapi --enable-libdrm --enable-ffnvcodec --enable-nvdec
-                  --enable-openssl --pkg-config-flags=--static)
+                  --enable-openssl --enable-libzimg --pkg-config-flags=--static)
     fi
     (cd "$SRC/ffmpeg" && make distclean >/dev/null 2>&1 || true
      cd "$SRC/ffmpeg" && ./configure "${FF_OPTS[@]}" && make -j"$JOBS" && make install)

@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential nasm pkg-config ninja-build \
-            patchelf python3-pip curl \
+            patchelf python3-pip curl autoconf automake libtool \
             libva-dev libdrm-dev libegl-dev libgl-dev \
             libx11-dev libxext-dev libxrandr-dev libxpresent-dev libxss-dev libxinerama-dev \
             libxcursor-dev libxi-dev libxfixes-dev libxkbcommon-dev \

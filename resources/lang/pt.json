@@ -233,5 +233,9 @@
   "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "A versão da Microsoft Store não consegue usar drivers gráficos antigos como este. O instalador de cctolga.github.io/tolga funciona neste computador.",
   "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "O OpenSubtitles permite 5 downloads por dia sem conta. Inicie sessão com uma conta gratuita para ter 20 por dia.",
   "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "Você usou os downloads de hoje do OpenSubtitles. Eles voltam em até 24 horas; uma conta VIP do OpenSubtitles permite 1.000 por dia.",
-  "Log in for more...": "Inicie sessão para mais..."
+  "Log in for more...": "Inicie sessão para mais...",
+  "This TV can't show HDR, so the video is converted to SDR for it.": "Esta TV não consegue mostrar HDR, então o vídeo é convertido para SDR para ela.",
+  "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "Este computador não é rápido o suficiente para converter este vídeo HDR para SDR para a TV. Para assistir a filmes HDR sem conversão, a TV precisa mostrar HDR.",
+  "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "Este vídeo está em Dolby Vision perfil 5, que precisa de uma TV que mostre HDR ou Dolby Vision. A TV desta Apple TV não mostra.",
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Esta TV não consegue mostrar HDR, e este computador não tem como converter vídeo HDR para SDR para ela. Para assistir a filmes HDR, a TV precisa mostrar HDR."
 }

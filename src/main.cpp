@@ -513,6 +513,7 @@ int main(int argc, char** argv) {
             if (d.deviceId != deviceId) continue;
             std::string reason;
             if (!airplay->canCast(st.path, tracks, reason)) {
+                reason = T(reason.c_str());  // the module's English, translated when known
                 if (castStatus.active() || castStatus.phase == CastStatus::Phase::Ended) {
                     // another video was picked while casting and the TV can't play it: end the
                     // TV session and keep the new video here, paused, instead of leaving the TV
@@ -880,13 +881,13 @@ int main(int argc, char** argv) {
         // ---- casting status (updated from the network thread, polled here)
         castStatus = airplay->status();
         if (castStatus.notice != lastCastNotice) {
-            if (!castStatus.notice.empty()) overlay.showToast(castStatus.notice);
+            if (!castStatus.notice.empty()) overlay.showToast(T(castStatus.notice.c_str()));
             lastCastNotice = castStatus.notice;
         }
         if (castStatus.phase != lastCastPhase) {
             using P = CastStatus::Phase;
             if (castStatus.phase == P::Failed) {
-                overlay.showToast(castStatus.error);
+                overlay.showToast(T(castStatus.error.c_str()));  // the module's English, translated when known
                 stopCast(false);
             } else if (castStatus.phase == P::Ended) {
                 const std::string name = castStatus.deviceName;

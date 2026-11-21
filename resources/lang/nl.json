@@ -233,5 +233,9 @@
   "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "De Microsoft Store-versie kan oudere grafische stuurprogramma's zoals dit niet gebruiken. Het installatieprogramma van cctolga.github.io/tolga werkt op deze computer.",
   "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles staat zonder account 5 downloads per dag toe. Log in met een gratis account voor 20 per dag.",
   "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "Je hebt de downloads van vandaag bij OpenSubtitles gebruikt. Ze komen binnen 24 uur terug; een VIP-account bij OpenSubtitles geeft 1.000 per dag.",
-  "Log in for more...": "Log in voor meer..."
+  "Log in for more...": "Log in voor meer...",
+  "This TV can't show HDR, so the video is converted to SDR for it.": "Deze tv kan geen HDR weergeven, dus de video wordt voor de tv omgezet naar SDR.",
+  "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "Deze computer is niet snel genoeg om deze HDR-video voor de tv naar SDR om te zetten. Om HDR-films zonder omzetten te bekijken, moet de tv HDR kunnen weergeven.",
+  "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "Deze video is in Dolby Vision profiel 5 en heeft een tv nodig die HDR of Dolby Vision weergeeft. De tv van deze Apple TV kan dat niet.",
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Deze tv kan geen HDR weergeven en deze computer kan HDR-video niet voor de tv naar SDR omzetten. Om HDR-films te bekijken, moet de tv HDR kunnen weergeven."
 }

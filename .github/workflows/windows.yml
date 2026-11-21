@@ -20,7 +20,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-posix mingw-w64-tools \
-            nasm pkg-config ninja-build cmake nsis zip python3-pip curl
+            nasm pkg-config ninja-build cmake nsis zip python3-pip curl autoconf automake libtool
           pip3 install --user --break-system-packages "meson>=1.6,<2"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 

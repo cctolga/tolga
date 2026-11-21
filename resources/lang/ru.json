@@ -233,5 +233,9 @@
   "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Версия из Microsoft Store не может использовать старые графические драйверы, такие как этот. Установщик с cctolga.github.io/tolga работает на этом компьютере.",
   "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles разрешает без учётной записи 5 загрузок в день. Войдите в бесплатную учётную запись, чтобы получить 20 в день.",
   "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "Вы использовали сегодняшние загрузки OpenSubtitles. Они восстановятся в течение 24 часов; VIP-аккаунт OpenSubtitles даёт 1000 в день.",
-  "Log in for more...": "Войти, чтобы получить больше..."
+  "Log in for more...": "Войти, чтобы получить больше...",
+  "This TV can't show HDR, so the video is converted to SDR for it.": "Этот телевизор не может показывать HDR, поэтому видео для него преобразуется в SDR.",
+  "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "Этот компьютер недостаточно быстрый, чтобы преобразовать это HDR-видео в SDR для телевизора. Чтобы смотреть HDR-фильмы без преобразования, нужен телевизор с поддержкой HDR.",
+  "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "Это видео в Dolby Vision профиля 5, для него нужен телевизор с поддержкой HDR или Dolby Vision. Телевизор, подключённый к этой Apple TV, их не поддерживает.",
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Этот телевизор не может показывать HDR, а этот компьютер не умеет преобразовывать HDR-видео в SDR для него. Чтобы смотреть HDR-фильмы, нужен телевизор с поддержкой HDR."
 }

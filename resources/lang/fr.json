@@ -233,5 +233,9 @@
   "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "La version Microsoft Store ne peut pas utiliser d'anciens pilotes graphiques comme celui-ci. Le programme d'installation de cctolga.github.io/tolga fonctionne sur cet ordinateur.",
   "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles autorise 5 téléchargements par jour sans compte. Connectez-vous avec un compte gratuit pour en avoir 20 par jour.",
   "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "Vous avez utilisé les téléchargements OpenSubtitles du jour. Ils reviennent sous 24 heures ; un compte VIP OpenSubtitles en permet 1 000 par jour.",
-  "Log in for more...": "Se connecter pour plus..."
+  "Log in for more...": "Se connecter pour plus...",
+  "This TV can't show HDR, so the video is converted to SDR for it.": "Ce téléviseur ne peut pas afficher le HDR : la vidéo est donc convertie en SDR pour lui.",
+  "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "Cet ordinateur n'est pas assez rapide pour convertir cette vidéo HDR en SDR pour le téléviseur. Pour regarder des films HDR sans conversion, le téléviseur doit afficher le HDR.",
+  "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "Cette vidéo est en Dolby Vision profil 5, qui nécessite un téléviseur affichant le HDR ou le Dolby Vision. Le téléviseur de cette Apple TV ne le peut pas.",
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Ce téléviseur ne peut pas afficher le HDR, et cet ordinateur n'a aucun moyen de convertir la vidéo HDR en SDR pour lui. Pour regarder des films HDR, le téléviseur doit afficher le HDR."
 }

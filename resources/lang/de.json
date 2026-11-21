@@ -233,5 +233,9 @@
   "This Microsoft Store version can't use older graphics drivers like this one. The installer from cctolga.github.io/tolga works on this computer.": "Die Microsoft-Store-Version kann ältere Grafiktreiber wie diesen nicht nutzen. Das Installationsprogramm von cctolga.github.io/tolga funktioniert auf diesem Computer.",
   "OpenSubtitles allows 5 downloads a day without an account. Log in with a free account for 20 a day.": "OpenSubtitles erlaubt ohne Konto 5 Downloads am Tag. Mit einem kostenlosen Konto sind es 20 am Tag.",
   "You've used today's OpenSubtitles downloads. They come back within 24 hours, or a VIP account at OpenSubtitles allows 1,000 a day.": "Du hast die heutigen OpenSubtitles-Downloads aufgebraucht. Sie stehen innerhalb von 24 Stunden wieder bereit; ein VIP-Konto bei OpenSubtitles erlaubt 1.000 am Tag.",
-  "Log in for more...": "Für mehr anmelden..."
+  "Log in for more...": "Für mehr anmelden...",
+  "This TV can't show HDR, so the video is converted to SDR for it.": "Dieser Fernseher kann kein HDR anzeigen, daher wird das Video für ihn in SDR umgewandelt.",
+  "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "Dieser Computer ist nicht schnell genug, um dieses HDR-Video für den Fernseher in SDR umzuwandeln. Um HDR-Filme ohne Umwandlung anzusehen, muss der Fernseher HDR anzeigen können.",
+  "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "Dieses Video ist in Dolby Vision Profil 5 und braucht einen Fernseher, der HDR oder Dolby Vision anzeigt. Der Fernseher an diesem Apple TV kann das nicht.",
+  "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Dieser Fernseher kann kein HDR anzeigen, und dieser Computer kann HDR-Videos nicht für ihn in SDR umwandeln. Um HDR-Filme anzusehen, muss der Fernseher HDR anzeigen können."
 }
