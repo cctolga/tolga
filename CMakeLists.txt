@@ -64,6 +64,8 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3 OpenGL::GL)
 # macOS: `brew install mpv pkg-config`
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
+# the same FFmpeg libraries mpv uses: reading picture subtitles to turn them into text
+pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil)
 
 # ---------------------------------------------------------------- AirPlay
 # AirPlay is a separate, closed-source module; the player only knows the interface in
@@ -173,6 +175,7 @@ add_executable(tolga
   src/Thumbnailer.cpp
   src/RecentFiles.cpp
   src/ResumePositions.cpp
+  src/SubtitleOcr.cpp
   src/MpvPlayer.cpp
   src/Overlay.cpp
   src/Ffmpeg.cpp
@@ -192,7 +195,7 @@ endforeach()
 file(WRITE ${CMAKE_BINARY_DIR}/lang/Languages.inc.new "${_lang_inc}")
 configure_file(${CMAKE_BINARY_DIR}/lang/Languages.inc.new ${CMAKE_BINARY_DIR}/lang/Languages.inc COPYONLY)
 target_include_directories(tolga PRIVATE ${CMAKE_BINARY_DIR}/lang)
-target_link_libraries(tolga PRIVATE imgui PkgConfig::MPV ${_airplay_lib} CURL::libcurl nlohmann_json::nlohmann_json
+target_link_libraries(tolga PRIVATE imgui PkgConfig::MPV PkgConfig::LIBAV ${_airplay_lib} CURL::libcurl nlohmann_json::nlohmann_json
                       Threads::Threads)
 target_compile_definitions(tolga PRIVATE TOLGA_WEBSITE="${TOLGA_WEBSITE}" TOLGA_VERSION="${PROJECT_VERSION}"
                           TOLGA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -227,9 +230,15 @@ if(WIN32)
   target_link_libraries(tolga PRIVATE shlwapi dwmapi)   # AssocQueryString: who opens .mkv; dark title bar
 endif()
 
+if(NOT APPLE)
+  target_sources(tolga PRIVATE src/SubtitleOcrNone.cpp)   # no text recognition here yet
+endif()
+
 if(APPLE)
-  target_sources(tolga PRIVATE src/MacWindow.mm src/DefaultAppMac.mm)
-  target_link_libraries(tolga PRIVATE "-framework Cocoa" "-framework CoreServices" "-framework UniformTypeIdentifiers")
+  target_sources(tolga PRIVATE src/MacWindow.mm src/DefaultAppMac.mm src/SubtitleOcrMac.mm)
+  set_source_files_properties(src/SubtitleOcrMac.mm PROPERTIES COMPILE_OPTIONS -fobjc-arc)
+  target_link_libraries(tolga PRIVATE "-framework Cocoa" "-framework CoreServices" "-framework UniformTypeIdentifiers"
+                        "-framework Vision" "-framework CoreGraphics")
   target_compile_definitions(tolga PRIVATE GL_SILENCE_DEPRECATION)
   target_compile_definitions(imgui PRIVATE GL_SILENCE_DEPRECATION)
 endif()

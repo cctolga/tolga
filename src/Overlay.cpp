@@ -3018,15 +3018,36 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
                 if (anyPictures)
                     for (const Track* t : subs)
                         if (t->id == picked && !isTextSubtitle(*t))
-                            showToast(TF("{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.",
-                                         {tvName}));
+                            showToast(airplay.canConvertSubs
+                                ? TF("{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.", {tvName})
+                                : TF("{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.",
+                                     {tvName}));
             }
             if (anyPictures) {
                 ImGui::Dummy({0, 4});
                 ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + inner);
-                ImGui::TextDisabled("%s", TF("{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.",
-                                             {tvName}).c_str());
+                ImGui::TextDisabled("%s", airplay.canConvertSubs
+                    ? TF("{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.",
+                         {tvName}).c_str()
+                    : TF("{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.",
+                         {tvName}).c_str());
                 ImGui::PopTextWrapPos();
+                // the user decides: the chosen picture subtitle read as text by this computer
+                const Track* chosen = nullptr;
+                for (const Track* t : subs)
+                    if (t->id == sid && !isTextSubtitle(*t)) chosen = t;
+                if (airplay.convertingSub >= 0) {
+                    ImGui::Dummy({0, 4});
+                    ImGui::TextDisabled("%s", TF("Converting to text... {}%",
+                                                 {std::to_string(int(airplay.convertProgress * 100))}).c_str());
+                } else if (airplay.canConvertSubs && chosen) {
+                    ImGui::Dummy({0, 6});
+                    if (pillButton(T("Convert to Text"), ImGui::GetCursorScreenPos())) {
+                        out.convertSub = true;
+                        out.convertSubId = chosen->id;
+                    }
+                    ImGui::Dummy({0, 2});
+                }
             }
         });
         ImGui::Dummy({0, 18});

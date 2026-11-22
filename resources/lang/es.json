@@ -238,5 +238,13 @@
   "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "Este ordenador no es lo bastante rápido para convertir este vídeo HDR a SDR para el televisor. Para ver películas HDR sin convertirlas, el televisor tiene que mostrar HDR.",
   "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "Este vídeo está en Dolby Vision perfil 5, que necesita un televisor que muestre HDR o Dolby Vision. El televisor de este Apple TV no puede.",
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Este televisor no puede mostrar HDR y este ordenador no tiene forma de convertir vídeo HDR a SDR para él. Para ver películas HDR, el televisor tiene que mostrar HDR.",
-  "Continuing from {}, where you left off.": "Continúa desde {}, donde lo dejaste."
+  "Continuing from {}, where you left off.": "Continúa desde {}, donde lo dejaste.",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{} solo muestra subtítulos de texto; los atenuados están guardados como imágenes. Convierte uno a texto o busca uno de texto en línea.",
+  "Convert to Text": "Convertir a texto",
+  "Converting to text... {}%": "Convirtiendo a texto... {} %",
+  "Subtitles converted to text.": "Subtítulos convertidos a texto.",
+  "Couldn't read text from these subtitles.": "No se pudo leer texto de estos subtítulos.",
+  "Converted from pictures": "Convertido de imágenes",
+  "{} (converted from pictures)": "{} (convertido de imágenes)",
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} solo muestra subtítulos de texto, y este está guardado como imágenes. Conviértelo a texto en el panel Subtítulos o busca uno de texto en línea."
 }

@@ -238,5 +238,13 @@
   "This computer isn't fast enough to convert this HDR video to SDR for the TV. To watch HDR films without converting them, the TV needs to show HDR.": "Этот компьютер недостаточно быстрый, чтобы преобразовать это HDR-видео в SDR для телевизора. Чтобы смотреть HDR-фильмы без преобразования, нужен телевизор с поддержкой HDR.",
   "This video is in Dolby Vision profile 5, which needs a TV that shows HDR or Dolby Vision. The TV on this Apple TV doesn't.": "Это видео в Dolby Vision профиля 5, для него нужен телевизор с поддержкой HDR или Dolby Vision. Телевизор, подключённый к этой Apple TV, их не поддерживает.",
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Этот телевизор не может показывать HDR, а этот компьютер не умеет преобразовывать HDR-видео в SDR для него. Чтобы смотреть HDR-фильмы, нужен телевизор с поддержкой HDR.",
-  "Continuing from {}, where you left off.": "Продолжение с {}, где вы остановились."
+  "Continuing from {}, where you left off.": "Продолжение с {}, где вы остановились.",
+  "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{} показывает только текстовые субтитры; затенённые сохранены как изображения. Преобразуйте одни из них в текст или найдите текстовые субтитры в интернете.",
+  "Convert to Text": "Преобразовать в текст",
+  "Converting to text... {}%": "Преобразование в текст... {}%",
+  "Subtitles converted to text.": "Субтитры преобразованы в текст.",
+  "Couldn't read text from these subtitles.": "Не удалось прочитать текст из этих субтитров.",
+  "Converted from pictures": "Преобразовано из изображений",
+  "{} (converted from pictures)": "{} (преобразовано из изображений)",
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} показывает только текстовые субтитры, а эти сохранены как изображения. Преобразуйте их в текст на панели «Субтитры» или найдите текстовые субтитры в интернете."
 }

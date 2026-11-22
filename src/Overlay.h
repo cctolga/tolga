@@ -97,6 +97,9 @@ struct OverlayActions {
     bool        toggleMaximize = false;
     bool        closeWindow    = false;
 
+    bool        convertSub = false;         // turn the picture subtitle `convertSubId` into text
+    int64_t     convertSubId = -1;
+
     bool        submitPin = false;          // user typed the PIN shown on the TV
     std::string pin;
     bool        cancelPin = false;
@@ -112,6 +115,9 @@ struct AirPlayView {
     std::string licenseError;          // last activation error, shown in the license dialog
     bool        available = true;      // false: this build has no AirPlay module
     std::string castBlocked;           // why the open video can't go to an Apple TV ("" = it can)
+    bool        canConvertSubs = false;  // picture subtitles can be turned into text here
+    int64_t     convertingSub = -1;      // the subtitle being turned into text (-1 = none)
+    float       convertProgress = 0;     // 0..1
 };
 
 // What the playlist view needs besides the player state.

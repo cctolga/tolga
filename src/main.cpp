@@ -4,6 +4,7 @@
 #include "tolga/AirPlayApi.h"
 #include "MpvPlayer.h"
 #include "OpenSubtitles.h"
+#include "SubtitleOcr.h"
 #include "DurationCache.h"
 #include "Thumbnailer.h"
 #include "RecentFiles.h"
@@ -458,6 +459,7 @@ int main(int argc, char** argv) {
     OpenSubtitles online(configDir, pushWake);
     RecentFiles recent(configDir);
     ResumePositions positions(configDir);  // where each video was left
+    SubtitleOcr subtitleOcr(pushWake);     // picture subtitles read as text, for the Apple TV
     std::string castPath;                  // the file the TV was given (its position is the TV's)
     // A file opened while casting goes to the TV once mpv has listed its tracks: at "file
     // loaded" the list can still be empty, and with no video track in it the module took the
@@ -561,8 +563,10 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "[sync] sub %lld is stored as pictures; the TV gets %lld\n",
                              (long long)selectedTrack(st, "sub"), (long long)castSentSub);
                 if (castSentSub < 0)
-                    overlay.showToast(TF("{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.",
-                                         {d.name}));
+                    overlay.showToast(ocrAvailable()
+                        ? TF("{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.", {d.name})
+                        : TF("{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.",
+                             {d.name}));
             }
             castSeenSerial = 0;
             castPath = st.path;
@@ -571,6 +575,19 @@ int main(int argc, char** argv) {
             airplay->startCast(d.deviceId, st.path, startAt >= 0 ? startAt : st.timePos, st.duration, tracks, st.subDelay);
             return;
         }
+    };
+    // Adds the text version of the picture subtitle `fromTrack` and shows it.
+    auto addTextSubtitle = [&](const std::string& srt, int64_t fromTrack) {
+        const PlayerState& st = player.state();
+        std::string title = T("Converted from pictures"), lang;
+        for (const Track& t : st.tracks)
+            if (t.type == "sub" && t.id == fromTrack) {
+                lang = t.lang;
+                if (!t.title.empty()) title = TF("{} (converted from pictures)", {t.title});
+            }
+        std::fprintf(stderr, "[ocr] adding %s\n", srt.c_str());
+        player.addSubtitle(srt, title, lang);
+        player.setSubVisibility(true);
     };
     // Back to this computer, continuing where the TV was.
     auto stopCast = [&](bool resume) {
@@ -656,6 +673,12 @@ int main(int argc, char** argv) {
             apView.castBlocked = castBlocked;
         } else if (st.idle) {
             castCheckKey.clear();
+        }
+        apView.canConvertSubs = ocrAvailable() && !configDir.empty();
+        {
+            const SubtitleOcr::Status ocr = subtitleOcr.status();
+            apView.convertingSub = ocr.state == SubtitleOcr::State::Running ? ocr.trackId : -1;
+            apView.convertProgress = ocr.progress;
         }
         onlineStatus = online.status();
         OnlineView onlineView{&onlineStatus, &onlineSettings, OpenSubtitles::queryFromFileName(st.path)};
@@ -938,6 +961,24 @@ int main(int argc, char** argv) {
             }
         }
 
+        // ---- a picture subtitle read as text: add it and show it (it then goes to the TV)
+        {
+            const SubtitleOcr::Status ocr = subtitleOcr.status();
+            const PlayerState& pst = player.state();
+            if (ocr.state == SubtitleOcr::State::Running && (pst.idle || pst.path != ocr.video)) {
+                subtitleOcr.cancel();  // another video was opened
+            } else if (ocr.state == SubtitleOcr::State::Done || ocr.state == SubtitleOcr::State::Failed) {
+                subtitleOcr.acknowledge();
+                if (ocr.state == SubtitleOcr::State::Done && !pst.idle && pst.path == ocr.video) {
+                    addTextSubtitle(ocr.output, ocr.trackId);
+                    overlay.showToast(T("Subtitles converted to text."));
+                } else if (ocr.state == SubtitleOcr::State::Failed) {
+                    overlay.showToast(T("Couldn't read text from these subtitles."));
+                }
+                redrawFrames = std::max(redrawFrames, 2);
+            }
+        }
+
         // ---- casting status (updated from the network thread, polled here)
         if (!castAfterLoad.empty()) {
             const PlayerState& pst = player.state();
@@ -1142,6 +1183,20 @@ int main(int argc, char** argv) {
         if (act.cancelPin) stopCast(false);
         if (act.loadSubFile)       showSubtitleDialog(window);
         if (act.selectSub)         player.selectSubtitle(act.subId);
+        if (act.convertSub && !st.idle) {
+            for (const Track& t : st.tracks)
+                if (t.type == "sub" && t.id == act.convertSubId && t.ffIndex >= 0) {
+                    const std::string srt = SubtitleOcr::cachePath(configDir, st.path, t.ffIndex);
+                    std::error_code ec;
+                    if (std::filesystem::exists(utf8Path(srt), ec)) {
+                        addTextSubtitle(srt, t.id);  // converted before
+                    } else {
+                        std::fprintf(stderr, "[ocr] reading subtitle %lld (stream %lld, %s) as text\n",
+                                     (long long)t.id, (long long)t.ffIndex, t.lang.c_str());
+                        subtitleOcr.start(st.path, t.id, t.ffIndex, t.lang, srt);
+                    }
+                }
+        }
         if (act.selectAudio)       player.selectAudio(act.audioId);
         if (act.selectSecondarySub)  player.selectSecondarySubtitle(act.secondarySubId);
         if (act.setSubVisible)       player.setSubVisibility(act.subVisible);
