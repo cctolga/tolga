@@ -173,7 +173,11 @@ int leadingBars(const std::vector<uint8_t>& gray, int w, int h, float band0, flo
 // the space between them is a word space (measured on whole films: a word space is 0.29-0.5
 // of the line height, the space between letters at most 0.19). `bar`: the word is a lone
 // plain upright bar, i.e. a capital "I" (maybe with a comma after it: `comma`).
-struct InkWord { int x0, x1; bool bar, comma; };
+// `firstI`: what the word's first letter is when it is a thin stroke, for Turkish, where
+// recognition mixes up I, İ, i and ı: 'I' tall, 'D' tall with a dot (İ), 'i' short with a
+// dot, 'd' short (ı); 0 when it isn't a thin stroke.
+// `smallIs`: the same for the word's other letters that are a short thin stroke ('i' / 'd'), in order.
+struct InkWord { int x0, x1; bool bar, comma; char firstI = 0; std::string smallIs; };
 std::vector<InkWord> inkWords(const std::vector<uint8_t>& gray, int w, int h, float band0, float band1) {
     std::vector<InkWord> words;
     const int y0 = std::clamp(int(band0), 0, h - 1), y1 = std::clamp(int(band1), 0, h - 1);
@@ -209,13 +213,50 @@ std::vector<InkWord> inkWords(const std::vector<uint8_t>& gray, int w, int h, fl
         return inked >= (b.bottom - b.top + 1) * 0.92f;
     };
     auto isDot = [&](const Blob& b) { return b.bottom - b.top + 1 <= lineH * 0.35f && b.bottom > top + lineH * 0.5f; };
+    // the longest unbroken vertical stroke of the line: the height of a capital or a tall
+    // letter (l, k, d), to tell a capital I from a small i by
+    int tallest = 0;
+    for (int x = 0; x < w; ++x) {
+        int run = 0;
+        for (int y = top; y <= bottom; ++y) {
+            run = dark(x, y) ? run + 1 : 0;
+            tallest = std::max(tallest, run);
+        }
+    }
     size_t k = 0;
     while (k < blobs.size()) {
         size_t e = k;
         while (e + 1 < blobs.size() && blobs[e + 1].x0 - blobs[e].x1 - 1 < lineH * 0.25f) ++e;
         InkWord word{blobs[k].x0, blobs[e].x1, false, false};
+        // a thin stroke, maybe with a dot above it (a gap in its middle column): 'I' tall, 'D' tall
+        // with a dot (İ), 'i' short with a dot, 'd' short (ı); 0 for anything else
+        auto strokeKind = [&](const Blob& f) -> char {
+            if (f.x1 - f.x0 + 1 > lineH * 0.22f) return 0;
+            const int mid = (f.x0 + f.x1) / 2;
+            auto inkAt = [&](int y) { return dark(mid, y) || (mid > f.x0 && dark(mid - 1, y)) || (mid < f.x1 && dark(mid + 1, y)); };
+            std::vector<std::pair<int, int>> runs;  // runs of ink down the middle column
+            for (int y = f.top; y <= f.bottom; ++y)
+                if (inkAt(y)) {
+                    if (!runs.empty() && runs.back().second == y - 1) runs.back().second = y;
+                    else runs.push_back({y, y});
+                }
+            if (runs.empty() || runs.size() > 2) return 0;
+            const auto& stem = runs.back();
+            const int stemH = stem.second - stem.first + 1;
+            const bool dot = runs.size() == 2 && runs[0].second - runs[0].first + 1 < lineH * 0.2f;
+            if (runs.size() == 2 && !dot) return 0;
+            // (measured: a small i is about 0.73 of a capital, a capital I all of it)
+            if (stemH >= tallest * 0.87f) return dot ? 'D' : 'I';
+            if (stemH >= tallest * 0.6f) return dot ? 'i' : 'd';
+            return 0;
+        };
         if (e == k && isBar(blobs[k])) word.bar = true;
         if (e == k + 1 && isBar(blobs[k]) && isDot(blobs[e])) word.bar = word.comma = true;
+        word.firstI = strokeKind(blobs[k]);
+        for (size_t b = k + 1; b <= e; ++b) {
+            const char kind = strokeKind(blobs[b]);
+            if (kind == 'i' || kind == 'd') word.smallIs += kind;
+        }
         words.push_back(word);
         k = e + 1;
     }
@@ -255,6 +296,7 @@ std::string fixLine(std::string t, const std::string& lang) {
         const bool first = i == 0;
         const bool english = lang.empty() || lang == "eng" || lang == "en";
         const bool french = lang == "fre" || lang == "fra" || lang == "fr";
+        const bool turkic = lang == "tur" || lang == "tr" || lang == "aze" || lang == "az";
         // an italic capital I read as a slash: "/ am", "As / was"
         if (english && word == "/") word = "I";
         // "ll" read as two capital I: "I'II", "AIl", "AII"
@@ -277,11 +319,16 @@ std::string fixLine(std::string t, const std::string& lang) {
             bool fixed = false;
             if (lowers > 0 && others == 0 && std::isalpha(static_cast<unsigned char>(word[0])))
                 for (size_t c = 1; c < word.size(); ++c)
-                    if (word[c] == 'I' && (c + 1 >= word.size() || word[c + 1] != '\'')) { word[c] = 'i'; fixed = true; }
+                    if (word[c] == 'I' && (c + 1 >= word.size() || word[c + 1] != '\'')) {
+                        // (Turkish and Azerbaijani: the small of I is the dotless ı)
+                        if (turkic) word.replace(c, 1, "ı"); else word[c] = 'i';
+                        fixed = true;
+                    }
             // "IcI" in the middle of a sentence: the first one was small too
             size_t back = out.find_last_not_of(' ');
-            if (fixed && word[0] == 'I' && back != std::string::npos && std::strchr(".!?-", out[back]) == nullptr)
-                word[0] = 'i';
+            if (fixed && word[0] == 'I' && back != std::string::npos && std::strchr(".!?-", out[back]) == nullptr) {
+                if (turkic) word.replace(0, 1, "ı"); else word[0] = 'i';
+            }
         }
         if (english) {
             // "I'll" without its apostrophe at the start of a line or after a dash
@@ -387,6 +434,47 @@ std::string ocrAssemble(const std::vector<uint8_t>& gray, int width, int height,
             }
         }
         t = fixLine(t, lang);
+        // Turkish: the first letter of each word as the picture shows it (İ/I, i/ı), when the
+        // picture and the text have the same words
+        if (lang == "tur" || lang == "tr" || lang == "aze" || lang == "az") {
+            const std::vector<InkWord> ink = inkWords(gray, width, height, band0, band1);
+            std::vector<size_t> starts;
+            for (size_t a = 0; a < t.size(); ++a)
+                if (t[a] != ' ' && (a == 0 || t[a - 1] == ' ')) starts.push_back(a);
+            if (ink.size() == starts.size()) {
+                // (from the right, so the earlier places stay where they are)
+                for (size_t k = starts.size(); k-- > 0;) {
+                    size_t a = starts[k];
+                    while (a < t.size() && std::strchr("-\"'(", t[a])) ++a;  // "-İyi", "\"İnan"
+                    if (a >= t.size() || !ink[k].firstI) continue;
+                    size_t len = 0;
+                    if (t[a] == 'I' || t[a] == 'i') len = 1;
+                    else if (t.compare(a, 2, "İ") == 0 || t.compare(a, 2, "ı") == 0) len = 2;
+                    if (!len) continue;
+                    const char* letter = ink[k].firstI == 'I' ? "I" : ink[k].firstI == 'D' ? "İ"
+                                       : ink[k].firstI == 'i' ? "i" : "ı";
+                    t.replace(a, len, letter);
+                }
+                // the i and ı inside each word ("Hazir" -> "Hazır"), when the word has as many of
+                // them as the picture shows short strokes
+                for (size_t k = starts.size(); k-- > 0;) {
+                    const size_t from = starts[k];
+                    size_t end = t.find(' ', from);
+                    if (end == std::string::npos) end = t.size();
+                    std::vector<std::pair<size_t, size_t>> at;  // byte place and length of each i / ı
+                    size_t a = from;
+                    while (a < end && std::strchr("-\"'(", t[a])) ++a;
+                    a += (a < end && (static_cast<unsigned char>(t[a]) & 0x80)) ? 2 : 1;  // after the first letter
+                    for (; a < end; ++a) {
+                        if (t[a] == 'i') at.push_back({a, 1});
+                        else if (t.compare(a, 2, "ı") == 0) { at.push_back({a, 2}); ++a; }
+                    }
+                    if (at.empty() || at.size() != ink[k].smallIs.size()) continue;
+                    for (size_t q = at.size(); q-- > 0;)
+                        t.replace(at[q].first, at[q].second, ink[k].smallIs[q] == 'i' ? "i" : "ı");
+                }
+            }
+        }
         // a word made of bars only, dropped or glued to the next one
         if (english || french) {
             bool nextIsBar = false;
