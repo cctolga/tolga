@@ -240,11 +240,18 @@
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Questo televisore non può mostrare l'HDR e questo computer non ha modo di convertire video HDR in SDR. Per guardare film HDR, il televisore deve mostrare l'HDR.",
   "Continuing from {}, where you left off.": "Si riprende da {}, dove avevi interrotto.",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{} mostra solo sottotitoli di testo; quelli attenuati sono salvati come immagini. Convertine uno in testo o cerca online un sottotitolo di testo.",
-  "Convert to Text": "Converti in testo",
   "Converting to text... {}%": "Conversione in testo... {}%",
   "Subtitles converted to text.": "Sottotitoli convertiti in testo.",
   "Couldn't read text from these subtitles.": "Impossibile leggere il testo da questi sottotitoli.",
-  "Converted from pictures": "Convertito da immagini",
   "{} (converted from pictures)": "{} (convertito da immagini)",
-  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} mostra solo sottotitoli di testo, e questo è salvato come immagini. Convertilo in testo nel pannello Sottotitoli o cerca online un sottotitolo di testo."
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} mostra solo sottotitoli di testo, e questo è salvato come immagini. Convertilo in testo nel pannello Sottotitoli o cerca online un sottotitolo di testo.",
+  "Convert from pictures to text": "Converti da immagini a testo",
+  "Thai": "Thailandese",
+  "Vietnamese": "Vietnamita",
+  "Indonesian": "Indonesiano",
+  "Malay": "Malese",
+  "Croatian": "Croato",
+  "Serbian": "Serbo",
+  "Slovak": "Slovacco",
+  "Catalan": "Catalano"
 }

@@ -240,11 +240,18 @@
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Bu televizyon HDR gösteremiyor ve bu bilgisayarın HDR videoyu televizyon için SDR'ye çevirecek bir yolu yok. HDR filmleri izlemek için HDR destekli bir televizyon gerekir.",
   "Continuing from {}, where you left off.": "Kaldığınız yerden ({}) devam ediliyor.",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; soluk olanlar resim olarak saklanmış. Birini metne çevirebilir ya da çevrimiçi aramayla bir metin altyazısı bulabilirsiniz.",
-  "Convert to Text": "Metne Çevir",
   "Converting to text... {}%": "Metne çevriliyor... %{}",
   "Subtitles converted to text.": "Altyazılar metne çevrildi.",
   "Couldn't read text from these subtitles.": "Bu altyazılardaki yazı okunamadı.",
-  "Converted from pictures": "Resimden çevrildi",
   "{} (converted from pictures)": "{} (resimden çevrildi)",
-  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; bu altyazı resim olarak saklanmış. Altyazılar panelinde metne çevirebilir ya da çevrimiçi aramayla bir metin altyazısı bulabilirsiniz."
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} yalnızca metin altyazılarını gösterebilir; bu altyazı resim olarak saklanmış. Altyazılar panelinde metne çevirebilir ya da çevrimiçi aramayla bir metin altyazısı bulabilirsiniz.",
+  "Convert from pictures to text": "Resimden metne çevir",
+  "Thai": "Tayca",
+  "Vietnamese": "Vietnamca",
+  "Indonesian": "Endonezce",
+  "Malay": "Malayca",
+  "Croatian": "Hırvatça",
+  "Serbian": "Sırpça",
+  "Slovak": "Slovakça",
+  "Catalan": "Katalanca"
 }

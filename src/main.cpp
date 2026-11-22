@@ -577,9 +577,42 @@ int main(int argc, char** argv) {
         }
     };
     // Adds the text version of the picture subtitle `fromTrack` and shows it.
+    // Where the text version of each picture subtitle of the open file is kept (by mpv track
+    // ID), worked out once per file and track list. A picture subtitle whose text version is
+    // loaded already isn't offered for converting again.
+    std::map<int64_t, std::string> textVersions;
+    std::string textVersionsKey;
+    auto updateTextVersions = [&](const PlayerState& st) {
+        const std::string key = st.path + "#" + std::to_string(st.tracks.size());
+        if (key == textVersionsKey) return;
+        textVersionsKey = key;
+        textVersions.clear();
+        if (st.idle || configDir.empty()) return;
+        for (const Track& t : st.tracks)
+            if (t.type == "sub" && !isTextSubtitle(t) && t.ffIndex >= 0)
+                textVersions[t.id] = SubtitleOcr::cachePath(configDir, st.path, t.ffIndex);
+    };
+    // the loaded text version of picture subtitle `fromTrack` (-1: not loaded)
+    auto loadedTextVersion = [&](const PlayerState& st, int64_t fromTrack) -> int64_t {
+        const auto it = textVersions.find(fromTrack);
+        if (it == textVersions.end()) return -1;
+        // (by file name: it is unique, and mpv may spell the folder differently)
+        const std::string name = it->second.substr(it->second.find_last_of("/\\") + 1);
+        for (const Track& t : st.tracks)
+            if (t.type == "sub" && t.external && t.externalFile.size() >= name.size() &&
+                t.externalFile.compare(t.externalFile.size() - name.size(), name.size(), name) == 0)
+                return t.id;
+        return -1;
+    };
     auto addTextSubtitle = [&](const std::string& srt, int64_t fromTrack) {
         const PlayerState& st = player.state();
-        std::string title = T("Converted from pictures"), lang;
+        if (const int64_t loaded = loadedTextVersion(st, fromTrack); loaded >= 0) {
+            player.selectSubtitle(loaded);  // there already
+            player.setSubVisibility(true);
+            return;
+        }
+        // named after the picture subtitle ("Forced", "Commentary"), so they can be told apart
+        std::string title = TF("{} (converted from pictures)", {T("Subtitles")}), lang;
         for (const Track& t : st.tracks)
             if (t.type == "sub" && t.id == fromTrack) {
                 lang = t.lang;
@@ -675,6 +708,12 @@ int main(int argc, char** argv) {
             castCheckKey.clear();
         }
         apView.canConvertSubs = ocrAvailable() && !configDir.empty();
+        apView.convertedSubs.clear();
+        if (apView.canConvertSubs) {
+            updateTextVersions(st);
+            for (const auto& [id, path] : textVersions)
+                if (loadedTextVersion(st, id) >= 0) apView.convertedSubs.push_back(id);
+        }
         {
             const SubtitleOcr::Status ocr = subtitleOcr.status();
             apView.convertingSub = ocr.state == SubtitleOcr::State::Running ? ocr.trackId : -1;

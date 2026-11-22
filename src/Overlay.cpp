@@ -1557,7 +1557,11 @@ std::string languageName(const std::string& code) {
         {"ell", "Greek"}, {"el", "Greek"}, {"aze", "Azerbaijani"}, {"az", "Azerbaijani"}, {"per", "Persian"},
         {"fas", "Persian"}, {"heb", "Hebrew"}, {"hin", "Hindi"}, {"ukr", "Ukrainian"}, {"dan", "Danish"},
         {"fin", "Finnish"}, {"nor", "Norwegian"}, {"cze", "Czech"}, {"ces", "Czech"}, {"hun", "Hungarian"},
-        {"rum", "Romanian"}, {"ron", "Romanian"}, {"bul", "Bulgarian"},
+        {"rum", "Romanian"}, {"ron", "Romanian"}, {"bul", "Bulgarian"}, {"tha", "Thai"}, {"th", "Thai"},
+        {"vie", "Vietnamese"}, {"vi", "Vietnamese"}, {"ind", "Indonesian"}, {"id", "Indonesian"},
+        {"may", "Malay"}, {"msa", "Malay"}, {"ms", "Malay"}, {"hrv", "Croatian"}, {"hr", "Croatian"},
+        {"srp", "Serbian"}, {"sr", "Serbian"}, {"slo", "Slovak"}, {"slk", "Slovak"}, {"sk", "Slovak"},
+        {"cat", "Catalan"}, {"ca", "Catalan"},
     };
     std::string l = code;
     for (char& c : l) c = char(std::tolower(static_cast<unsigned char>(c)));
@@ -1688,24 +1692,57 @@ void iconBubble(ImDrawList* dl, ImVec2 c, ImU32 col) {
 // A rounded list of tracks with "<None>" on top. `selected` is the chosen track ID (-1 = none).
 // Returns true and sets `picked` when a row was clicked.
 // `notHere`: rows it says yes to are dimmed and marked with `notHereLabel` (still clickable).
+// A dimmed row can offer an action on a line of its own (`RowAction`, e.g. "Convert to text");
+// while it runs for one row, that row shows its progress.
+struct RowAction {
+    const char* label = nullptr;      // nullptr: no action
+    int64_t     busyId = -1;          // the track it is running for (-1 = none)
+    float       progress = 0;         // 0..1
+    std::string busyLabel;            // shown instead of the label while running
+    int64_t     clicked = -1;         // set to the track whose action was clicked
+    const std::vector<int64_t>* done = nullptr;  // tracks it was done for already (not offered again)
+};
+
 bool trackList(const char* id, const std::vector<const Track*>& tracks, int64_t selected, bool withNone,
                float width, int64_t& picked, bool (*notHere)(const Track&) = nullptr,
-               const char* notHereLabel = nullptr) {
-    const float rowH = 38.0f;
+               const char* notHereLabel = nullptr, RowAction* action = nullptr) {
+    const float rowH = 38.0f, actionH = 30.0f;
     const int rows = int(tracks.size()) + (withNone ? 1 : 0);
+    auto rowTrack = [&](int r) -> const Track* {
+        return withNone ? (r == 0 ? nullptr : tracks[size_t(r - 1)]) : tracks[size_t(r)];
+    };
+    auto hasAction = [&](const Track* t) {
+        return t && action && action->label && notHere && notHere(*t) &&
+               (action->busyId < 0 || action->busyId == t->id) &&
+               !(action->done && std::find(action->done->begin(), action->done->end(), t->id) != action->done->end());
+    };
+    float total = 0;
+    for (int r = 0; r < rows; ++r) total += rowH + (hasAction(rowTrack(r)) ? actionH : 0);
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
-    const ImVec2 p1{p0.x + width, p0.y + std::max(rows, 1) * rowH + 8};
+    const ImVec2 p1{p0.x + width, p0.y + std::max(total, rowH) + 8};
     ImDrawList* dl = ImGui::GetWindowDrawList();
     dl->AddRectFilled(p0, p1, TC(255, 255, 255, 10), 10.0f);
     dl->AddRect(p0, p1, TC(255, 255, 255, 22), 10.0f);
 
     bool clicked = false;
     ImGui::PushID(id);
+    float rowY = p0.y + 4;
     for (int r = 0; r < rows; ++r) {
-        const Track* t = withNone ? (r == 0 ? nullptr : tracks[size_t(r - 1)]) : tracks[size_t(r)];
+        const Track* t = rowTrack(r);
         const int64_t tid = t ? t->id : -1;
-        const ImVec2 a{p0.x + 4, p0.y + 4 + r * rowH};
+        const bool withAction = hasAction(t);
+        const ImVec2 a{p0.x + 4, rowY};
         const ImVec2 b{p1.x - 4, a.y + rowH};
+        rowY += rowH + (withAction ? actionH : 0);
+        if (withAction && action->busyId == tid) {
+            // the work in progress: the row fills up in the accent colour, with a bar at its foot
+            const float f = std::clamp(action->progress, 0.0f, 1.0f);
+            const float x1 = a.x + (b.x - a.x) * f;
+            dl->AddRectFilled(a, {x1, b.y + actionH}, (kAccent & 0x00FFFFFF) | (40u << 24), 7.0f);
+            dl->AddRectFilled({a.x + 10, b.y + actionH - 5}, {b.x - 10, b.y + actionH - 2}, TC(255, 255, 255, 20), 1.5f);
+            dl->AddRectFilled({a.x + 10, b.y + actionH - 5}, {a.x + 10 + (b.x - a.x - 20) * f, b.y + actionH - 2},
+                              kAccent, 1.5f);
+        }
         ImGui::SetCursorScreenPos(a);
         ImGui::PushID(r);
         if (ImGui::InvisibleButton("##row", {b.x - a.x, rowH})) {
@@ -1738,6 +1775,27 @@ bool trackList(const char* id, const std::vector<const Track*>& tracks, int64_t 
             dl->PopClipRect();
         } else {
             dl->AddText({a.x + 22, ty}, TC(255, 255, 255, 110), T("<None>"));
+        }
+        if (withAction) {
+            // its own line under the row (below the row's hover box, not on it): a link, or the
+            // progress while it runs
+            const float ly = b.y + 4;
+            if (action->busyId == tid) {
+                dl->AddText({a.x + 22, ly}, kAccent, action->busyLabel.c_str());
+            } else {
+                const ImVec2 ls = ImGui::CalcTextSize(action->label);
+                const ImVec2 la{a.x + 16, ly - 3}, lb{a.x + 28 + ls.x, ly + ls.y + 3};
+                ImGui::SetCursorScreenPos(la);
+                ImGui::PushID(int(r + 10000));
+                if (ImGui::InvisibleButton("##action", {lb.x - la.x, lb.y - la.y})) action->clicked = tid;
+                const bool ahov = ImGui::IsItemHovered();
+                ImGui::PopID();
+                if (ahov) {
+                    dl->AddRectFilled(la, lb, (kAccent & 0x00FFFFFF) | (36u << 24), 5.0f);
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                }
+                dl->AddText({a.x + 22, ly}, kAccent, action->label);
+            }
         }
     }
     ImGui::PopID();
@@ -3010,9 +3068,24 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
             const bool anyPictures = castHls && std::any_of(subs.begin(), subs.end(),
                                                             [](const Track* t) { return !isTextSubtitle(*t); });
             const std::string notOnTvBadge = T("Not on TV");
-            if (trackList("##subs", subs, sid, true, inner, picked,
+            // picture rows offer to be read as text (the user decides); the one being read shows its progress
+            RowAction convert;
+            const std::string convertLabel = T("Convert from pictures to text");
+            if (airplay.canConvertSubs) {
+                convert.label = convertLabel.c_str();
+                convert.busyId = airplay.convertingSub;
+                convert.done = &airplay.convertedSubs;
+                convert.progress = airplay.convertProgress;
+                convert.busyLabel = TF("Converting to text... {}%", {std::to_string(int(airplay.convertProgress * 100))});
+            }
+            const bool rowClicked = trackList("##subs", subs, sid, true, inner, picked,
                           anyPictures ? +[](const Track& t) { return !isTextSubtitle(t); } : nullptr,
-                          notOnTvBadge.c_str())) {
+                          notOnTvBadge.c_str(), &convert);
+            if (convert.clicked >= 0) {
+                out.convertSub = true;
+                out.convertSubId = convert.clicked;
+            }
+            if (rowClicked) {
                 out.selectSub = true;
                 out.subId = picked;
                 if (anyPictures)
@@ -3032,22 +3105,6 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
                     : TF("{} shows only text subtitles; the dimmed ones are stored as pictures. Search online for a text one.",
                          {tvName}).c_str());
                 ImGui::PopTextWrapPos();
-                // the user decides: the chosen picture subtitle read as text by this computer
-                const Track* chosen = nullptr;
-                for (const Track* t : subs)
-                    if (t->id == sid && !isTextSubtitle(*t)) chosen = t;
-                if (airplay.convertingSub >= 0) {
-                    ImGui::Dummy({0, 4});
-                    ImGui::TextDisabled("%s", TF("Converting to text... {}%",
-                                                 {std::to_string(int(airplay.convertProgress * 100))}).c_str());
-                } else if (airplay.canConvertSubs && chosen) {
-                    ImGui::Dummy({0, 6});
-                    if (pillButton(T("Convert to Text"), ImGui::GetCursorScreenPos())) {
-                        out.convertSub = true;
-                        out.convertSubId = chosen->id;
-                    }
-                    ImGui::Dummy({0, 2});
-                }
             }
         });
         ImGui::Dummy({0, 18});

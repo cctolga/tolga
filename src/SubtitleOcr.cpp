@@ -32,10 +32,9 @@ std::string srtTime(double s) {
     return buf;
 }
 
-// The picture of one subtitle as dark text on white, made bigger for small (DVD) pictures:
-// text recognition reads letters a few dozen pixels high best. Bright letters become dark,
-// their dark outline and the transparent parts become white.
-bool subtitlePicture(const AVSubtitle& sub, int videoHeight, std::vector<uint8_t>& out, int& w, int& h) {
+// The picture of one subtitle as dark text on white (`sw` x `sh`, unscaled). Bright letters
+// become dark, their dark outline and the transparent parts become white.
+bool subtitlePicture(const AVSubtitle& sub, std::vector<uint8_t>& src, int& sw, int& sh) {
     int x0 = 1 << 30, y0 = 1 << 30, x1 = -1, y1 = -1;
     for (unsigned i = 0; i < sub.num_rects; ++i) {
         const AVSubtitleRect* r = sub.rects[i];
@@ -44,8 +43,9 @@ bool subtitlePicture(const AVSubtitle& sub, int videoHeight, std::vector<uint8_t
         x1 = std::max(x1, r->x + r->w); y1 = std::max(y1, r->y + r->h);
     }
     if (x1 < 0) return false;
-    const int sw = x1 - x0, sh = y1 - y0;
-    std::vector<uint8_t> src(size_t(sw) * sh, 255);
+    sw = x1 - x0;
+    sh = y1 - y0;
+    src.assign(size_t(sw) * sh, 255);
     for (unsigned i = 0; i < sub.num_rects; ++i) {
         const AVSubtitleRect* r = sub.rects[i];
         if (r->type != SUBTITLE_BITMAP || r->w <= 0 || r->h <= 0 || !r->data[0] || !r->data[1]) continue;
@@ -58,23 +58,41 @@ bool subtitlePicture(const AVSubtitle& sub, int videoHeight, std::vector<uint8_t
                 src[size_t(y + r->y - y0) * sw + (x + r->x - x0)] = uint8_t(255 - a * lum / 255);
             }
     }
-    const int scale = (videoHeight > 0 && videoHeight <= 600) || sh < 60 ? 3 : 1;
-    const int pad = 24;
-    w = sw * scale + 2 * pad;
-    h = sh * scale + 2 * pad;
-    out.assign(size_t(w) * h, 255);
-    for (int y = 0; y < sh * scale; ++y)
-        for (int x = 0; x < sw * scale; ++x) {
-            // bilinear: smooth edges read better than blocks
-            const float fx = (x + 0.5f) / scale - 0.5f, fy = (y + 0.5f) / scale - 0.5f;
-            const int ix = std::clamp(int(std::floor(fx)), 0, sw - 1), iy = std::clamp(int(std::floor(fy)), 0, sh - 1);
-            const int jx = std::min(ix + 1, sw - 1), jy = std::min(iy + 1, sh - 1);
-            const float ax = std::clamp(fx - ix, 0.0f, 1.0f), ay = std::clamp(fy - iy, 0.0f, 1.0f);
-            const float top = src[size_t(iy) * sw + ix] * (1 - ax) + src[size_t(iy) * sw + jx] * ax;
-            const float bot = src[size_t(jy) * sw + ix] * (1 - ax) + src[size_t(jy) * sw + jx] * ax;
-            out[size_t(y + pad) * w + x + pad] = uint8_t(top * (1 - ay) + bot * ay + 0.5f);
-        }
     return true;
+}
+
+// The picture at `scale` (bilinear: smooth edges read better than blocks) with a white margin
+// of `pad` around it. Recognition misses or misreads text that is too big for its picture or
+// has too little room around it (measured on Korean and Japanese films: "응" read as "00").
+void scaledPicture(const std::vector<uint8_t>& src, int sw, int sh, float scale, int pad, std::vector<uint8_t>& out,
+                   int& w, int& h) {
+    const int dw = std::max(1, int(sw * scale + 0.5f)), dh = std::max(1, int(sh * scale + 0.5f));
+    w = dw + 2 * pad;
+    h = dh + 2 * pad;
+    out.assign(size_t(w) * h, 255);
+    const float inv = 1.0f / scale;
+    for (int y = 0; y < dh; ++y)
+        for (int x = 0; x < dw; ++x) {
+            float v;
+            if (scale >= 1.0f) {
+                const float fx = (x + 0.5f) * inv - 0.5f, fy = (y + 0.5f) * inv - 0.5f;
+                const int ix = std::clamp(int(std::floor(fx)), 0, sw - 1), iy = std::clamp(int(std::floor(fy)), 0, sh - 1);
+                const int jx = std::min(ix + 1, sw - 1), jy = std::min(iy + 1, sh - 1);
+                const float ax = std::clamp(fx - ix, 0.0f, 1.0f), ay = std::clamp(fy - iy, 0.0f, 1.0f);
+                const float top = src[size_t(iy) * sw + ix] * (1 - ax) + src[size_t(iy) * sw + jx] * ax;
+                const float bot = src[size_t(jy) * sw + ix] * (1 - ax) + src[size_t(jy) * sw + jx] * ax;
+                v = top * (1 - ay) + bot * ay;
+            } else {
+                // smaller: the average of the source pixels under this one
+                const int sx0 = int(x * inv), sx1 = std::min(sw, std::max(sx0 + 1, int((x + 1) * inv)));
+                const int sy0 = int(y * inv), sy1 = std::min(sh, std::max(sy0 + 1, int((y + 1) * inv)));
+                int sum = 0, n = 0;
+                for (int yy = sy0; yy < sy1; ++yy)
+                    for (int xx = sx0; xx < sx1; ++xx) { sum += src[size_t(yy) * sw + xx]; ++n; }
+                v = n ? float(sum) / n : 255.0f;
+            }
+            out[size_t(y + pad) * w + x + pad] = uint8_t(v + 0.5f);
+        }
 }
 
 }  // namespace
@@ -87,20 +105,23 @@ void replaceAll(std::string& s, const std::string& from, const std::string& to) 
     for (size_t at = 0; (at = s.find(from, at)) != std::string::npos; at += to.size()) s.replace(at, from.size(), to);
 }
 
-// Is the first thing on this line (rows y0..y1) a lone capital "I", i.e. a plain upright bar
-// followed by a word space? Recognition often drops it or glues it to the next word
-// ("I swerved" -> "swerved", "I ever" -> "lever"): a bar alone looks like a stray line.
-// `nextIsBar`: the word after it also starts with a tall thin bar ("I lost": that "l" is real).
-bool startsWithLoneI(const std::vector<uint8_t>& gray, int w, int h, float fy0, float fy1, bool& nextIsBar) {
+// How many plain upright bars the first word of this line is made of, when it is nothing
+// else: 1 for a lone capital "I" (English), 2 for "Il" (French); 0 otherwise. Recognition
+// often drops such a word or glues it to the next one ("I swerved" -> "swerved",
+// "I ever" -> "lever", "Il y a" -> "y a"): bars alone look like stray lines.
+// The line is rows fy0..fy1; it is looked at a little above and below too (band0..band1),
+// as the recognised box can miss the top of the letters (a "T" seen without its bar is an I).
+// `nextIsBar`: the next word also starts with a tall bar ("I lost": that "l" is real).
+int leadingBars(const std::vector<uint8_t>& gray, int w, int h, float band0, float band1, bool& nextIsBar) {
     nextIsBar = false;
-    const int y0 = std::clamp(int(fy0), 0, h - 1), y1 = std::clamp(int(fy1), 0, h - 1);
-    if (y1 - y0 < 8) return false;
+    const int y0 = std::clamp(int(band0), 0, h - 1), y1 = std::clamp(int(band1), 0, h - 1);
+    if (y1 - y0 < 8) return 0;
     auto dark = [&](int x, int y) { return gray[size_t(y) * w + x] < 128; };
     int top = h, bottom = -1;
     for (int y = y0; y <= y1; ++y)
         for (int x = 0; x < w; ++x)
             if (dark(x, y)) { top = std::min(top, y); bottom = std::max(bottom, y); break; }
-    if (bottom < 0) return false;
+    if (bottom < 0) return 0;
     const int lineH = bottom - top + 1;
     auto inkColumn = [&](int x, int& ct, int& cb) {
         bool any = false;
@@ -108,29 +129,97 @@ bool startsWithLoneI(const std::vector<uint8_t>& gray, int w, int h, float fy0, 
             if (dark(x, y)) { if (!any) ct = y; cb = y; any = true; }
         return any;
     };
+    struct Blob { int x0, x1, top, bottom; };
     int x = 0, ct = 0, cb = 0;
-    while (x < w && !inkColumn(x, ct, cb)) ++x;
-    if (x >= w) return false;
-    int blobTop = ct, blobBottom = cb;
-    const int start = x;
-    while (x < w && inkColumn(x, ct, cb)) { blobTop = std::min(blobTop, ct); blobBottom = std::max(blobBottom, cb); ++x; }
-    const int blobW = x - start, blobH = blobBottom - blobTop + 1;
-    const int gapStart = x;
-    while (x < w && !inkColumn(x, ct, cb)) ++x;
-    const int gap = x - gapStart;
-    // (measured on a whole film: a word space is 0.29-0.5 of the line height, the space between
+    auto nextBlob = [&](Blob& b, int& gapBefore) {
+        const int from = x;
+        while (x < w && !inkColumn(x, ct, cb)) ++x;
+        gapBefore = x - from;
+        if (x >= w) return false;
+        b = {x, x, ct, cb};
+        while (x < w && inkColumn(x, ct, cb)) { b.top = std::min(b.top, ct); b.bottom = std::max(b.bottom, cb); ++x; }
+        b.x1 = x;
+        return true;
+    };
+    // (measured on whole films: a word space is 0.29-0.5 of the line height, the space between
     // letters at most 0.19; an upright I is 0.1 wide, an italic one up to 0.35)
-    if (!(x < w && blobW <= lineH * 0.36f && blobH >= lineH * 0.55f && gap >= lineH * 0.25f)) return false;
-    // the first letter of the next word: an "l" is as tall as the I or taller, an "e" much lower
+    auto isBar = [&](const Blob& b) { return b.x1 - b.x0 <= lineH * 0.36f && b.bottom - b.top + 1 >= lineH * 0.55f; };
+    const float wordGap = lineH * 0.25f;
+    Blob first, second, after;
+    int gap0 = 0, gap1 = 0, gap2 = 0;
+    if (!nextBlob(first, gap0) || !isBar(first) || !nextBlob(second, gap1)) return 0;
+    int bars = 0;
+    if (gap1 >= wordGap) {
+        bars = 1;
+        after = second;
+    } else if (second.bottom - second.top + 1 <= lineH * 0.35f && second.bottom > first.top + lineH * 0.5f &&
+               nextBlob(after, gap2) && gap2 >= wordGap) {
+        bars = 1;  // "I, too": a comma right after it
+    } else if (isBar(second) && nextBlob(after, gap2) && gap2 >= wordGap) {
+        bars = 2;
+    } else {
+        return 0;
+    }
+    // the first letter of the next word: an "l" is as tall as the bar or taller, an "e" much lower
+    // (letters can touch: only its first few columns count)
     int nTop = h, nBottom = -1;
-    const int nStart = x;
-    while (x < w && inkColumn(x, ct, cb)) { nTop = std::min(nTop, ct); nBottom = std::max(nBottom, cb); ++x; }
-    // (letters can touch: only the first few columns count)
-    nTop = h; nBottom = -1;
-    for (int c = nStart; c < std::min(x, nStart + std::max(2, blobW)); ++c)
+    for (int c = after.x0; c < std::min(after.x1, after.x0 + std::max(2, first.x1 - first.x0)); ++c)
         if (inkColumn(c, ct, cb)) { nTop = std::min(nTop, ct); nBottom = std::max(nBottom, cb); }
-    nextIsBar = nBottom >= 0 && nBottom - nTop + 1 >= blobH * 0.95f;
-    return true;
+    nextIsBar = nBottom >= 0 && nBottom - nTop + 1 >= (first.bottom - first.top + 1) * 0.95f;
+    return bars;
+}
+
+// The words of a line as the picture shows them (rows band0..band1): runs of ink split where
+// the space between them is a word space (measured on whole films: a word space is 0.29-0.5
+// of the line height, the space between letters at most 0.19). `bar`: the word is a lone
+// plain upright bar, i.e. a capital "I" (maybe with a comma after it: `comma`).
+struct InkWord { int x0, x1; bool bar, comma; };
+std::vector<InkWord> inkWords(const std::vector<uint8_t>& gray, int w, int h, float band0, float band1) {
+    std::vector<InkWord> words;
+    const int y0 = std::clamp(int(band0), 0, h - 1), y1 = std::clamp(int(band1), 0, h - 1);
+    if (y1 - y0 < 8) return words;
+    auto dark = [&](int x, int y) { return gray[size_t(y) * w + x] < 128; };
+    int top = h, bottom = -1;
+    for (int y = y0; y <= y1; ++y)
+        for (int x = 0; x < w; ++x)
+            if (dark(x, y)) { top = std::min(top, y); bottom = std::max(bottom, y); break; }
+    if (bottom < 0) return words;
+    const float lineH = float(bottom - top + 1);
+    struct Blob { int x0, x1, top, bottom; };
+    std::vector<Blob> blobs;
+    for (int x = 0; x < w; ++x) {
+        int ct = -1, cb = -1;
+        for (int y = top; y <= bottom; ++y)
+            if (dark(x, y)) { if (ct < 0) ct = y; cb = y; }
+        if (ct < 0) continue;
+        if (!blobs.empty() && blobs.back().x1 == x - 1) {
+            Blob& b = blobs.back();
+            b.x1 = x; b.top = std::min(b.top, ct); b.bottom = std::max(b.bottom, cb);
+        } else {
+            blobs.push_back({x, x, ct, cb});
+        }
+    }
+    // (a thin, unbroken stroke: not a "1" with its flag, not a "!" with its dot)
+    auto isBar = [&](const Blob& b) {
+        if (b.x1 - b.x0 + 1 > lineH * 0.22f || b.bottom - b.top + 1 < lineH * 0.55f) return false;
+        const int mid = (b.x0 + b.x1) / 2;
+        int inked = 0;
+        for (int y = b.top; y <= b.bottom; ++y)
+            if (dark(mid, y) || (mid > b.x0 && dark(mid - 1, y)) || (mid < b.x1 && dark(mid + 1, y))) ++inked;
+        return inked >= (b.bottom - b.top + 1) * 0.92f;
+    };
+    auto isDot = [&](const Blob& b) { return b.bottom - b.top + 1 <= lineH * 0.35f && b.bottom > top + lineH * 0.5f; };
+    size_t k = 0;
+    while (k < blobs.size()) {
+        size_t e = k;
+        while (e + 1 < blobs.size() && blobs[e + 1].x0 - blobs[e].x1 - 1 < lineH * 0.25f) ++e;
+        InkWord word{blobs[k].x0, blobs[e].x1, false, false};
+        if (e == k && isBar(blobs[k])) word.bar = true;
+        if (e == k + 1 && isBar(blobs[k]) && isDot(blobs[e])) word.bar = word.comma = true;
+        words.push_back(word);
+        k = e + 1;
+    }
+    return words;
 }
 
 bool latinLanguage(const std::string& lang) {
@@ -144,13 +233,16 @@ bool latinLanguage(const std::string& lang) {
 
 // Word by word fixes for one line
 std::string fixLine(std::string t, const std::string& lang) {
-    replaceAll(t, "|", "I");
     if (latinLanguage(lang)) {
+        replaceAll(t, "|", "I");  // (elsewhere a bar is a bar: Thai "เด็ด / เด็ดมาก")
         // Cyrillic letters that look like Latin ones ("А long one")
         static const char* look[][2] = {{"А", "A"}, {"В", "B"}, {"Е", "E"}, {"К", "K"}, {"М", "M"}, {"Н", "H"},
                                         {"О", "O"}, {"Р", "P"}, {"С", "C"}, {"Т", "T"}, {"Х", "X"}, {"а", "a"},
                                         {"е", "e"}, {"о", "o"}, {"р", "p"}, {"с", "c"}, {"у", "y"}, {"х", "x"}};
         for (auto& l : look) replaceAll(t, l[0], l[1]);
+        replaceAll(t, "н", "H");  // a small Cyrillic n is a small capital H ("нey")
+        // the dotless i belongs to Turkish and Azerbaijani only ("Nidavellır")
+        if (lang != "tur" && lang != "tr" && lang != "aze" && lang != "az") replaceAll(t, "ı", "i");
     }
     // word by word (keeping the punctuation around each word)
     std::string out;
@@ -161,13 +253,36 @@ std::string fixLine(std::string t, const std::string& lang) {
         if (j == std::string::npos) j = t.size();
         std::string word = t.substr(i, j - i);
         const bool first = i == 0;
+        const bool english = lang.empty() || lang == "eng" || lang == "en";
+        const bool french = lang == "fre" || lang == "fra" || lang == "fr";
         // an italic capital I read as a slash: "/ am", "As / was"
-        if (word == "/") word = "I";
+        if (english && word == "/") word = "I";
         // "ll" read as two capital I: "I'II", "AIl", "AII"
         replaceAll(word, "'II", "'ll");
         replaceAll(word, "'Il", "'ll");
         if (word == "AIl" || word == "AII" || word == "AIl." || word == "AII.") word.replace(1, 2, "ll");
-        const bool english = lang.empty() || lang == "eng" || lang == "en";
+        // French "Il" / "Ils" read as two capital I ("II y a"); in English "II" is a number
+        if (french && (word == "II" || startsWith(word, "II ") || word == "IIs" || word == "IIS")) {
+            word[1] = 'l';
+            if (word.size() == 3) word[2] = 's';
+        }
+        // a capital I among small letters is a small one: "moI", "IcI" -> "moi", "Ici"
+        {
+            int lowers = 0, others = 0;
+            for (size_t c = 1; c < word.size(); ++c) {
+                const unsigned char ch = static_cast<unsigned char>(word[c]);
+                if (std::islower(ch)) ++lowers;
+                else if (std::isupper(ch) && ch != 'I') ++others;
+            }
+            bool fixed = false;
+            if (lowers > 0 && others == 0 && std::isalpha(static_cast<unsigned char>(word[0])))
+                for (size_t c = 1; c < word.size(); ++c)
+                    if (word[c] == 'I' && (c + 1 >= word.size() || word[c + 1] != '\'')) { word[c] = 'i'; fixed = true; }
+            // "IcI" in the middle of a sentence: the first one was small too
+            size_t back = out.find_last_not_of(' ');
+            if (fixed && word[0] == 'I' && back != std::string::npos && std::strchr(".!?-", out[back]) == nullptr)
+                word[0] = 'i';
+        }
         if (english) {
             // "I'll" without its apostrophe at the start of a line or after a dash
             if ((first || out.empty() || out.back() == '-') && word == "Ill") word = "I'll";
@@ -214,9 +329,15 @@ std::string ocrAssemble(const std::vector<uint8_t>& gray, int width, int height,
         on->pieces.push_back(std::move(p));
     }
     std::sort(lines.begin(), lines.end(), [](const Line& a, const Line& b) { return a.y0 + a.y1 < b.y0 + b.y1; });
+    const bool english = lang.empty() || lang == "eng" || lang == "en";
+    const bool french = lang == "fre" || lang == "fra" || lang == "fr";
     std::string text;
-    for (Line& l : lines) {
+    for (size_t li = 0; li < lines.size(); ++li) {
+        Line& l = lines[li];
         std::sort(l.pieces.begin(), l.pieces.end(), [](const OcrPiece& a, const OcrPiece& b) { return a.x0 < b.x0; });
+        const float extra = 0.3f * (l.y1 - l.y0);
+        const float band0 = std::max(l.y0 - extra, li > 0 ? lines[li - 1].y1 : 0.0f);
+        const float band1 = std::min(l.y1 + extra, li + 1 < lines.size() ? lines[li + 1].y0 : float(height));
         std::string t;
         for (const OcrPiece& p : l.pieces) {
             std::string piece = p.text;
@@ -227,21 +348,79 @@ std::string ocrAssemble(const std::vector<uint8_t>& gray, int width, int height,
             t += piece;
         }
         if (t.empty()) continue;
+        if (english) {
+            // A lone "I" left out ("Because I was" -> "Because was", "I, too" -> ", too"): the
+            // picture has more words than the text, and the extra ones are bars. Put them back
+            // where they are, only when that accounts for every missing word.
+            const std::vector<InkWord> ink = inkWords(gray, width, height, band0, band1);
+            std::vector<std::string> said;
+            for (size_t a = 0; a < t.size();) {
+                const size_t sp = t.find(' ', a);
+                const size_t e = sp == std::string::npos ? t.size() : sp;
+                if (e > a) said.push_back(t.substr(a, e - a));
+                a = e + 1;
+            }
+            int missing = int(ink.size()) - int(said.size());
+            if (missing > 0) {
+                std::vector<std::string> fixed;
+                size_t j = 0;
+                for (size_t i = 0; i < ink.size(); ++i) {
+                    const bool readAsI = j < said.size() && (said[j] == "I" || said[j] == "I," || said[j] == "I.");
+                    if (ink[i].bar && missing > 0 && !readAsI) {
+                        if (ink[i].comma && j < said.size() && said[j].size() > 1 && std::strchr(",.", said[j][0])) {
+                            fixed.push_back("I" + said[j++]);  // ", too" -> "I, too"
+                        } else if (ink[i].comma && j < said.size() && (said[j] == "," || said[j] == ".")) {
+                            fixed.push_back("I" + said[j++]);
+                        } else {
+                            fixed.push_back(ink[i].comma ? "I," : "I");
+                        }
+                        --missing;
+                    } else if (j < said.size()) {
+                        fixed.push_back(said[j++]);
+                    }
+                }
+                while (j < said.size()) fixed.push_back(said[j++]);
+                if (missing == 0) {
+                    t.clear();
+                    for (const std::string& f : fixed) { if (!t.empty()) t += ' '; t += f; }
+                }
+            }
+        }
         t = fixLine(t, lang);
-        bool nextIsBar = false;
-        if (latinLanguage(lang) && !startsWith(t, "I ") && t != "I" && !startsWith(t, "I.") && !startsWith(t, "1") &&
-            startsWithLoneI(gray, width, height, l.y0, l.y1, nextIsBar)) {
+        // a word made of bars only, dropped or glued to the next one
+        if (english || french) {
+            bool nextIsBar = false;
+            const int bars = leadingBars(gray, width, height, band0, band1, nextIsBar);
             const bool glued = t.size() > 1 && std::islower(static_cast<unsigned char>(t[1]));
-            if (glued && t[0] == 'I')
-                t = "I " + t.substr(1);  // "Ilost" -> "I lost"
-            else if (glued && t[0] == 'l' && !nextIsBar)
-                t = "I " + t.substr(1);  // "lever met" -> "I ever met" (the I read as an l)
-            else
-                t = "I " + t;            // "swerved" -> "I swerved", "lost an eye" -> "I lost an eye"
+            // something was read for the bars ("I", "il", "[I", "l"): only make it the right word
+            const std::string firstWord = t.substr(0, t.find(' '));
+            const bool readAsBars = !firstWord.empty() && firstWord.size() <= 3 &&
+                                    firstWord.find_first_not_of("Il1|[]i!/") == std::string::npos;
+            const bool startsWithI = t[0] == 'I' && (t.size() == 1 || !std::isalpha(static_cast<unsigned char>(t[1])));
+            if (bars > 0 && readAsBars) {
+                if (english && bars == 1 && firstWord != "I") t = "I" + t.substr(firstWord.size());
+                if (french && bars == 2 && firstWord != "Il" && firstWord != "il") t = "Il" + t.substr(firstWord.size());
+            } else if (english && bars == 1 && std::strchr(",.", t[0])) {
+                t = "I" + t;  // ", too, sought" -> "I, too, sought"
+            } else if (english && bars == 1 && !startsWithI && !startsWith(t, "1")) {
+                if (glued && t[0] == 'I')
+                    t = "I " + t.substr(1);  // "Ilost" -> "I lost"
+                else if (glued && t[0] == 'l' && !nextIsBar)
+                    t = "I " + t.substr(1);  // "lever met" -> "I ever met" (the I read as an l)
+                else
+                    t = "I " + t;            // "swerved" -> "I swerved", "lost an eye" -> "I lost an eye"
+            } else if (french && bars == 2 && !startsWith(t, "Il ") && t != "Il" && !startsWith(t, "Il.") &&
+                       !startsWith(t, "Il,")) {
+                t = "Il " + t;  // "y a un vaisseau" -> "Il y a un vaisseau"
+            }
         }
         if (!text.empty()) text += '\n';
         text += t;
     }
+    // an opening quotation mark not seen: '"Oh, I'm gonna / go in my pants."' read without its first one
+    if (!text.empty() && text.front() != '"' && text.back() == '"' &&
+        std::count(text.begin(), text.end(), '"') % 2 == 1)
+        text.insert(0, "\"");
     return text;
 }
 
@@ -331,7 +510,7 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
     int read = 0, recognized = 0;
     AVPacket* pkt = av_packet_alloc();
     struct PktFree { AVPacket** p; ~PktFree() { av_packet_free(p); } } freePkt{&pkt};
-    std::vector<uint8_t> gray;
+    std::vector<uint8_t> src, gray;
     while (!m_cancel && av_read_frame(fmt, pkt) >= 0) {
         if (pkt->stream_index == ffIndex && pkt->pts != AV_NOPTS_VALUE) {
             AVSubtitle sub{};
@@ -341,8 +520,8 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
                 const double start = at + sub.start_display_time / 1000.0;
                 // an open subtitle ends where the next one (or an empty clear) begins
                 if (!events.empty() && (events.back().end < 0 || events.back().end > start)) events.back().end = start;
-                int w = 0, h = 0;
-                if (sub.num_rects > 0 && subtitlePicture(sub, videoHeight, gray, w, h)) {
+                int sw = 0, sh = 0, w = 0, h = 0;
+                if (sub.num_rects > 0 && subtitlePicture(sub, src, sw, sh)) {
                     ++read;
                     Event ev;
                     ev.start = start;
@@ -354,18 +533,17 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
                         ev.end = at + sub.end_display_time / 1000.0;
                     else if (pkt->duration > 0 && pkt->duration * tb < kLongest)
                         ev.end = start + pkt->duration * tb;
+                    // Letters about 50 pixels high read best: DVD subtitles (480 / 576 lines) three
+                    // times bigger, Blu-ray ones as they are on a 1080 line picture (a 4K one: half)
+                    const int canvas = dec->height > 0 ? dec->height : videoHeight;
+                    const float base = canvas > 0 && canvas <= 600 ? 3.0f
+                                       : canvas > 0 ? std::clamp(1080.0f / canvas, 0.4f, 2.0f) : 1.0f;
                     std::vector<OcrPiece> pieces;
-                    bool found = ocrRecognize(gray, w, h, lang, pieces);
-                    if (!found && w > 200 && h > 100) {
-                        // big lettering is sometimes not found at all ("Hi."): once more at half size
-                        std::vector<uint8_t> half(size_t(w / 2) * (h / 2));
-                        for (int y = 0; y < h / 2; ++y)
-                            for (int x = 0; x < w / 2; ++x)
-                                half[size_t(y) * (w / 2) + x] = uint8_t(
-                                    (gray[size_t(2 * y) * w + 2 * x] + gray[size_t(2 * y) * w + 2 * x + 1] +
-                                     gray[size_t(2 * y + 1) * w + 2 * x] + gray[size_t(2 * y + 1) * w + 2 * x + 1] + 2) / 4);
-                        if ((found = ocrRecognize(half, w / 2, h / 2, lang, pieces)))
-                            for (OcrPiece& p : pieces) { p.x0 *= 2; p.x1 *= 2; p.y0 *= 2; p.y1 *= 2; }
+                    bool found = false;
+                    // nothing read: once more smaller, then bigger ("Hi.", "응", "ソー")
+                    for (const float f : {1.0f, 0.66f, 1.5f}) {
+                        scaledPicture(src, sw, sh, base * f, 48, gray, w, h);
+                        if ((found = ocrRecognize(gray, w, h, lang, pieces))) break;
                     }
                     if (found) {
                         ev.text = ocrAssemble(gray, w, h, lang, std::move(pieces));

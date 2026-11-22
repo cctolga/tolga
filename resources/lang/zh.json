@@ -240,11 +240,18 @@
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "此电视无法显示 HDR，而此电脑无法为它将 HDR 视频转换为 SDR。要观看 HDR 影片，电视需要支持 HDR。",
   "Continuing from {}, where you left off.": "从上次停下的 {} 处继续播放。",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{} 只能显示文本字幕；灰色的字幕以图像形式保存。可以将其转换为文本，或在线搜索文本字幕。",
-  "Convert to Text": "转换为文本",
   "Converting to text... {}%": "正在转换为文本... {}%",
   "Subtitles converted to text.": "字幕已转换为文本。",
   "Couldn't read text from these subtitles.": "无法从这些字幕中读取文字。",
-  "Converted from pictures": "由图像转换",
   "{} (converted from pictures)": "{}（由图像转换）",
-  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} 只能显示文本字幕，而此字幕以图像形式保存。可以在字幕面板中将其转换为文本，或在线搜索文本字幕。"
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} 只能显示文本字幕，而此字幕以图像形式保存。可以在字幕面板中将其转换为文本，或在线搜索文本字幕。",
+  "Convert from pictures to text": "从图像转换为文本",
+  "Thai": "泰语",
+  "Vietnamese": "越南语",
+  "Indonesian": "印度尼西亚语",
+  "Malay": "马来语",
+  "Croatian": "克罗地亚语",
+  "Serbian": "塞尔维亚语",
+  "Slovak": "斯洛伐克语",
+  "Catalan": "加泰罗尼亚语"
 }

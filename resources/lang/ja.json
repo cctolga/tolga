@@ -240,11 +240,18 @@
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "このテレビはHDRを表示できず、このコンピュータにはHDRビデオをテレビ用にSDRへ変換する手段がありません。HDR映画を見るには、HDR対応のテレビが必要です。",
   "Continuing from {}, where you left off.": "前回の続き（{}）から再生します。",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{} はテキスト字幕のみ表示できます。淡色の字幕は画像として保存されています。テキストに変換するか、オンラインでテキスト字幕を検索してください。",
-  "Convert to Text": "テキストに変換",
   "Converting to text... {}%": "テキストに変換中... {}%",
   "Subtitles converted to text.": "字幕をテキストに変換しました。",
   "Couldn't read text from these subtitles.": "この字幕から文字を読み取れませんでした。",
-  "Converted from pictures": "画像から変換",
   "{} (converted from pictures)": "{}（画像から変換）",
-  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} はテキスト字幕のみ表示できますが、この字幕は画像として保存されています。字幕パネルでテキストに変換するか、オンラインでテキスト字幕を検索してください。"
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} はテキスト字幕のみ表示できますが、この字幕は画像として保存されています。字幕パネルでテキストに変換するか、オンラインでテキスト字幕を検索してください。",
+  "Convert from pictures to text": "画像からテキストに変換",
+  "Thai": "タイ語",
+  "Vietnamese": "ベトナム語",
+  "Indonesian": "インドネシア語",
+  "Malay": "マレー語",
+  "Croatian": "クロアチア語",
+  "Serbian": "セルビア語",
+  "Slovak": "スロバキア語",
+  "Catalan": "カタルーニャ語"
 }

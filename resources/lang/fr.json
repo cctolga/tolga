@@ -240,11 +240,18 @@
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Ce téléviseur ne peut pas afficher le HDR, et cet ordinateur n'a aucun moyen de convertir la vidéo HDR en SDR pour lui. Pour regarder des films HDR, le téléviseur doit afficher le HDR.",
   "Continuing from {}, where you left off.": "Reprise à {}, là où vous vous étiez arrêté.",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{} n'affiche que les sous-titres texte ; ceux en grisé sont enregistrés sous forme d'images. Convertissez-en un en texte ou cherchez un sous-titre texte en ligne.",
-  "Convert to Text": "Convertir en texte",
   "Converting to text... {}%": "Conversion en texte... {} %",
   "Subtitles converted to text.": "Sous-titres convertis en texte.",
   "Couldn't read text from these subtitles.": "Impossible de lire du texte dans ces sous-titres.",
-  "Converted from pictures": "Converti depuis des images",
   "{} (converted from pictures)": "{} (converti depuis des images)",
-  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} n'affiche que les sous-titres texte, et celui-ci est enregistré sous forme d'images. Convertissez-le en texte dans le panneau Sous-titres ou cherchez un sous-titre texte en ligne."
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} n'affiche que les sous-titres texte, et celui-ci est enregistré sous forme d'images. Convertissez-le en texte dans le panneau Sous-titres ou cherchez un sous-titre texte en ligne.",
+  "Convert from pictures to text": "Convertir les images en texte",
+  "Thai": "Thaï",
+  "Vietnamese": "Vietnamien",
+  "Indonesian": "Indonésien",
+  "Malay": "Malais",
+  "Croatian": "Croate",
+  "Serbian": "Serbe",
+  "Slovak": "Slovaque",
+  "Catalan": "Catalan"
 }

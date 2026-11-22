@@ -240,11 +240,18 @@
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "이 TV는 HDR을 표시할 수 없고, 이 컴퓨터에는 HDR 비디오를 TV용 SDR로 변환할 방법이 없습니다. HDR 영화를 보려면 HDR을 지원하는 TV가 필요합니다.",
   "Continuing from {}, where you left off.": "지난번에 멈춘 {}부터 이어서 재생합니다.",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{}에서는 텍스트 자막만 표시됩니다. 흐리게 표시된 자막은 이미지로 저장되어 있습니다. 텍스트로 변환하거나 온라인에서 텍스트 자막을 검색하세요.",
-  "Convert to Text": "텍스트로 변환",
   "Converting to text... {}%": "텍스트로 변환 중... {}%",
   "Subtitles converted to text.": "자막을 텍스트로 변환했습니다.",
   "Couldn't read text from these subtitles.": "이 자막에서 글자를 읽을 수 없습니다.",
-  "Converted from pictures": "이미지에서 변환됨",
   "{} (converted from pictures)": "{} (이미지에서 변환됨)",
-  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{}에서는 텍스트 자막만 표시되는데, 이 자막은 이미지로 저장되어 있습니다. 자막 패널에서 텍스트로 변환하거나 온라인에서 텍스트 자막을 검색하세요."
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{}에서는 텍스트 자막만 표시되는데, 이 자막은 이미지로 저장되어 있습니다. 자막 패널에서 텍스트로 변환하거나 온라인에서 텍스트 자막을 검색하세요.",
+  "Convert from pictures to text": "이미지에서 텍스트로 변환",
+  "Thai": "태국어",
+  "Vietnamese": "베트남어",
+  "Indonesian": "인도네시아어",
+  "Malay": "말레이어",
+  "Croatian": "크로아티아어",
+  "Serbian": "세르비아어",
+  "Slovak": "슬로바키아어",
+  "Catalan": "카탈루냐어"
 }

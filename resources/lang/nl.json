@@ -240,11 +240,18 @@
   "This TV can't show HDR, and this computer has no way to convert HDR video to SDR for it. To watch HDR films, the TV needs to show HDR.": "Deze tv kan geen HDR weergeven en deze computer kan HDR-video niet voor de tv naar SDR omzetten. Om HDR-films te bekijken, moet de tv HDR kunnen weergeven.",
   "Continuing from {}, where you left off.": "Verder vanaf {}, waar je was gebleven.",
   "{} shows only text subtitles; the dimmed ones are stored as pictures. Convert one to text, or search online for a text one.": "{} toont alleen tekstondertitels; de gedimde zijn als afbeeldingen opgeslagen. Zet er een om naar tekst of zoek online naar een tekstondertitel.",
-  "Convert to Text": "Omzetten naar tekst",
   "Converting to text... {}%": "Omzetten naar tekst... {}%",
   "Subtitles converted to text.": "Ondertitels omgezet naar tekst.",
   "Couldn't read text from these subtitles.": "Kon geen tekst uit deze ondertitels lezen.",
-  "Converted from pictures": "Omgezet uit afbeeldingen",
   "{} (converted from pictures)": "{} (omgezet uit afbeeldingen)",
-  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} toont alleen tekstondertitels, en deze is als afbeeldingen opgeslagen. Zet hem om naar tekst in het paneel Ondertitels of zoek online naar een tekstondertitel."
+  "{} shows only text subtitles, and this one is stored as pictures. Convert it to text in the Subtitles panel, or search online for a text one.": "{} toont alleen tekstondertitels, en deze is als afbeeldingen opgeslagen. Zet hem om naar tekst in het paneel Ondertitels of zoek online naar een tekstondertitel.",
+  "Convert from pictures to text": "Van afbeeldingen naar tekst omzetten",
+  "Thai": "Thai",
+  "Vietnamese": "Vietnamees",
+  "Indonesian": "Indonesisch",
+  "Malay": "Maleis",
+  "Croatian": "Kroatisch",
+  "Serbian": "Servisch",
+  "Slovak": "Slowaaks",
+  "Catalan": "Catalaans"
 }
