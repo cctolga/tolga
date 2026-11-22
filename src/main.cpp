@@ -718,6 +718,7 @@ int main(int argc, char** argv) {
             const SubtitleOcr::Status ocr = subtitleOcr.status();
             apView.convertingSub = ocr.state == SubtitleOcr::State::Running ? ocr.trackId : -1;
             apView.convertProgress = ocr.progress;
+            apView.convertDownloading = ocr.downloading;
         }
         onlineStatus = online.status();
         OnlineView onlineView{&onlineStatus, &onlineSettings, OpenSubtitles::queryFromFileName(st.path)};
@@ -1012,7 +1013,7 @@ int main(int argc, char** argv) {
                     addTextSubtitle(ocr.output, ocr.trackId);
                     overlay.showToast(T("Subtitles converted to text."));
                 } else if (ocr.state == SubtitleOcr::State::Failed) {
-                    overlay.showToast(T("Couldn't read text from these subtitles."));
+                    overlay.showToast(ocr.error.empty() ? T("Couldn't read text from these subtitles.") : T(ocr.error.c_str()));
                 }
                 redrawFrames = std::max(redrawFrames, 2);
             }

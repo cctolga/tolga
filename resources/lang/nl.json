@@ -253,5 +253,12 @@
   "Croatian": "Kroatisch",
   "Serbian": "Servisch",
   "Slovak": "Slowaaks",
-  "Catalan": "Catalaans"
+  "Catalan": "Catalaans",
+  "Downloading the reading model... {}%": "Leesmodel downloaden... {}%",
+  "Subtitles in this language can't be converted to text yet.": "Ondertitels in deze taal kunnen nog niet naar tekst worden omgezet.",
+  "Couldn't download the reading model. Check the internet connection.": "Kon het leesmodel niet downloaden. Controleer de internetverbinding.",
+  "The downloaded reading model was damaged. Try again.": "Het gedownloade leesmodel was beschadigd. Probeer het opnieuw.",
+  "Couldn't save the reading model.": "Kon het leesmodel niet opslaan.",
+  "The reading model is damaged.": "Het leesmodel is beschadigd.",
+  "This computer can't read text from pictures.": "Deze computer kan geen tekst uit afbeeldingen lezen."
 }

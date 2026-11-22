@@ -4,6 +4,11 @@
 
 bool ocrAvailable() { return false; }
 
+bool ocrPrepare(const std::string&, const std::function<void(float)>&, const std::atomic<bool>&, std::string& error) {
+    error = "This computer can't read text from pictures.";
+    return false;
+}
+
 bool ocrRecognize(const std::vector<uint8_t>&, int, int, const std::string&, std::vector<OcrPiece>& pieces) {
     pieces.clear();
     return false;

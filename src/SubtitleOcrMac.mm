@@ -34,6 +34,11 @@ NSString* visionLanguage(const std::string& lang) {
 
 }  // namespace
 
+// Vision has every language it knows built in: nothing to get ready
+bool ocrPrepare(const std::string&, const std::function<void(float)>&, const std::atomic<bool>&, std::string&) {
+    return true;
+}
+
 bool ocrAvailable() {
     if (@available(macOS 10.15, *)) return true;
     return false;

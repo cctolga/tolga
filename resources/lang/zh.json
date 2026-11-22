@@ -253,5 +253,12 @@
   "Croatian": "克罗地亚语",
   "Serbian": "塞尔维亚语",
   "Slovak": "斯洛伐克语",
-  "Catalan": "加泰罗尼亚语"
+  "Catalan": "加泰罗尼亚语",
+  "Downloading the reading model... {}%": "正在下载识别模型... {}%",
+  "Subtitles in this language can't be converted to text yet.": "此语言的字幕暂时无法转换为文本。",
+  "Couldn't download the reading model. Check the internet connection.": "无法下载识别模型。请检查网络连接。",
+  "The downloaded reading model was damaged. Try again.": "下载的识别模型已损坏。请重试。",
+  "Couldn't save the reading model.": "无法保存识别模型。",
+  "The reading model is damaged.": "识别模型已损坏。",
+  "This computer can't read text from pictures.": "这台电脑无法读取图像中的文字。"
 }

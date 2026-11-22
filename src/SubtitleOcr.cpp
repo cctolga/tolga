@@ -331,6 +331,12 @@ std::string fixLine(std::string t, const std::string& lang) {
             }
         }
         if (english) {
+            // "'ll" read with one l ("they'l", "I'l": two same letters in a row can merge)
+            {
+                size_t e = word.size();
+                while (e > 0 && std::strchr(".,!?;:\"", word[e - 1])) --e;
+                if (e >= 2 && word.compare(e - 2, 2, "'l") == 0) word.insert(e, "l");
+            }
             // "I'll" without its apostrophe at the start of a line or after a dash
             if ((first || out.empty() || out.back() == '-') && word == "Ill") word = "I'll";
             if (word.size() > 1 && word[0] == '-' && word.substr(1) == "Ill") word = "-I'll";
@@ -567,6 +573,23 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
         if (!m_cancel) m_status.state = ok ? State::Done : State::Failed;
         if (m_wake) m_wake();
     };
+
+    // the reading model for this language (downloaded the first time on Windows and Linux)
+    std::string why;
+    const bool ready = ocrPrepare(lang, [&](float p) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_status.downloading = true;
+        m_status.progress = p;
+        if (m_wake) m_wake();
+    }, m_cancel, why);
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_status.downloading = false;
+        m_status.progress = 0;
+        if (!ready) m_status.error = why;
+    }
+    if (m_cancel) return;
+    if (!ready) return finish(false, why.empty() ? "no reading model" : why.c_str());
 
     AVFormatContext* fmt = nullptr;
     if (avformat_open_input(&fmt, video.c_str(), nullptr, nullptr) < 0) return finish(false, "can't open the video");

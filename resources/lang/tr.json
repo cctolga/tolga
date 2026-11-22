@@ -253,5 +253,12 @@
   "Croatian": "Hırvatça",
   "Serbian": "Sırpça",
   "Slovak": "Slovakça",
-  "Catalan": "Katalanca"
+  "Catalan": "Katalanca",
+  "Downloading the reading model... {}%": "Okuma modeli indiriliyor... %{}",
+  "Subtitles in this language can't be converted to text yet.": "Bu dildeki altyazılar henüz metne çevrilemiyor.",
+  "Couldn't download the reading model. Check the internet connection.": "Okuma modeli indirilemedi. İnternet bağlantısını kontrol edin.",
+  "The downloaded reading model was damaged. Try again.": "İndirilen okuma modeli bozuk. Tekrar deneyin.",
+  "Couldn't save the reading model.": "Okuma modeli kaydedilemedi.",
+  "The reading model is damaged.": "Okuma modeli bozuk.",
+  "This computer can't read text from pictures.": "Bu bilgisayar resimlerdeki yazıyı okuyamıyor."
 }

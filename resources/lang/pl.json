@@ -253,5 +253,12 @@
   "Croatian": "Chorwacki",
   "Serbian": "Serbski",
   "Slovak": "Słowacki",
-  "Catalan": "Kataloński"
+  "Catalan": "Kataloński",
+  "Downloading the reading model... {}%": "Pobieranie modelu odczytu... {}%",
+  "Subtitles in this language can't be converted to text yet.": "Napisów w tym języku nie można jeszcze przekonwertować na tekst.",
+  "Couldn't download the reading model. Check the internet connection.": "Nie udało się pobrać modelu odczytu. Sprawdź połączenie z internetem.",
+  "The downloaded reading model was damaged. Try again.": "Pobrany model odczytu był uszkodzony. Spróbuj ponownie.",
+  "Couldn't save the reading model.": "Nie udało się zapisać modelu odczytu.",
+  "The reading model is damaged.": "Model odczytu jest uszkodzony.",
+  "This computer can't read text from pictures.": "Ten komputer nie potrafi odczytać tekstu z obrazów."
 }

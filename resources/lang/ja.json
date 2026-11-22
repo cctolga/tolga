@@ -253,5 +253,12 @@
   "Croatian": "クロアチア語",
   "Serbian": "セルビア語",
   "Slovak": "スロバキア語",
-  "Catalan": "カタルーニャ語"
+  "Catalan": "カタルーニャ語",
+  "Downloading the reading model... {}%": "読み取りモデルをダウンロード中... {}%",
+  "Subtitles in this language can't be converted to text yet.": "この言語の字幕はまだテキストに変換できません。",
+  "Couldn't download the reading model. Check the internet connection.": "読み取りモデルをダウンロードできませんでした。インターネット接続を確認してください。",
+  "The downloaded reading model was damaged. Try again.": "ダウンロードした読み取りモデルが破損していました。もう一度お試しください。",
+  "Couldn't save the reading model.": "読み取りモデルを保存できませんでした。",
+  "The reading model is damaged.": "読み取りモデルが破損しています。",
+  "This computer can't read text from pictures.": "このコンピュータは画像の文字を読み取れません。"
 }

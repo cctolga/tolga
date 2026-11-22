@@ -240,6 +240,8 @@ cat <<EOF
   SDL3                 zlib License   https://libsdl.org
   Dear ImGui           MIT            https://github.com/ocornut/imgui
   Material Symbols     Apache-2.0     https://github.com/google/material-design-icons (the cast icon)
+  PP-OCRv5 models      Apache-2.0     https://github.com/PaddlePaddle/PaddleOCR (downloaded when picture
+                                      subtitles are first converted to text)
   nlohmann/json        MIT            https://github.com/nlohmann/json
 EOF
 if [ -n "$HAS_AIRPLAY" ]; then

@@ -15,6 +15,12 @@
 // ---- the system's text recognition (SubtitleOcrMac.mm, SubtitleOcrNone.cpp)
 // This computer can read text from pictures.
 bool ocrAvailable();
+// Gets ready to read subtitles in `lang` (the file's language: "eng", "tur"...; may be empty).
+// Where the reading model has to be downloaded first (Windows, Linux) this does it, telling
+// `progress` how far it is (0..1) and stopping when `cancel` turns true. False when this
+// language can't be read here or the download failed (`error` says why, in English).
+bool ocrPrepare(const std::string& lang, const std::function<void(float)>& progress, const std::atomic<bool>& cancel,
+                std::string& error);
 // A piece of text found in a picture and where it is (pixels, top-left origin).
 struct OcrPiece {
     std::string text;
@@ -37,6 +43,8 @@ public:
     struct Status {
         State       state = State::Idle;
         float       progress = 0;   // 0..1 while running
+        bool        downloading = false;  // getting the reading model first (progress is the download's)
+        std::string error;          // why it failed (Failed; English, may be empty)
         std::string video;          // the video file
         int64_t     trackId = -1;   // mpv's ID of the picture track
         std::string output;         // the .srt (Done)

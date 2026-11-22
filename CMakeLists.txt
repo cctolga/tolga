@@ -231,7 +231,17 @@ if(WIN32)
 endif()
 
 if(NOT APPLE)
-  target_sources(tolga PRIVATE src/SubtitleOcrNone.cpp)   # no text recognition here yet
+  # Windows, Linux: PaddleOCR's recognition models run by ncnn (scripts/build-deps.sh builds it);
+  # the models are downloaded when first needed. Without ncnn: no text recognition.
+  find_package(ncnn CONFIG QUIET)
+  if(ncnn_FOUND)
+    target_sources(tolga PRIVATE src/SubtitleOcrNcnn.cpp)
+    target_link_libraries(tolga PRIVATE ncnn)
+    message(STATUS "Picture subtitles to text: ncnn ${ncnn_VERSION}")
+  else()
+    target_sources(tolga PRIVATE src/SubtitleOcrNone.cpp)
+    message(STATUS "Picture subtitles to text: not available (no ncnn)")
+  endif()
 endif()
 
 if(APPLE)

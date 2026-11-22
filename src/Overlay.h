@@ -118,6 +118,7 @@ struct AirPlayView {
     bool        canConvertSubs = false;  // picture subtitles can be turned into text here
     int64_t     convertingSub = -1;      // the subtitle being turned into text (-1 = none)
     float       convertProgress = 0;     // 0..1
+    bool        convertDownloading = false;  // getting the reading model first (progress is the download's)
     std::vector<int64_t> convertedSubs;  // picture subtitles whose text version is loaded already
 };
 

@@ -32,6 +32,7 @@ OPENSSL_VER=3.5.9
 NVCODEC_TAG=n13.0.19.0
 CURL_TAG=curl-8_23_0
 ZIMG_VER=3.0.6
+NCNN_TAG=20261020
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -322,6 +323,36 @@ if [ "$OS" = linux ] || [ "$OS" = windows ]; then
         mark zimg
     fi
     license zimg "$SRC/zimg/COPYING"
+fi
+
+# ---------------------------------------------------------------- ncnn (BSD-3), Linux and Windows, static
+# Runs PaddleOCR's text recognition models: subtitles stored as pictures (Blu-ray, DVD) are read
+# into text for the Apple TV (the Mac uses its own Vision). Only the layers those models use are
+# built, and no GPU (Vulkan) part: about 4 MB in the program.
+if [ "$OS" = linux ] || [ "$OS" = windows ]; then
+    fetch_git ncnn https://github.com/Tencent/ncnn.git "$NCNN_TAG"
+    version ncnn "$NCNN_TAG" "BSD-3-Clause (static)  https://github.com/Tencent/ncnn"
+    if ! done_mark ncnn; then
+        log ncnn
+        NCNN_KEEP=" BinaryOp Concat Convolution ConvolutionDepthWise Gemm HardSigmoid HardSwish InnerProduct Input
+                   LayerNorm MultiHeadAttention Permute Pooling Reshape Softmax Split Squeeze Swish Padding Packing
+                   Cast Flatten Crop Slice Eltwise Noop Dropout MatMul ExpandDims Sigmoid ReLU Interp Clip UnaryOp "
+        NCNN_OFF=()
+        for l in $(grep -o 'ncnn_add_layer([A-Za-z0-9_]*' "$SRC/ncnn/src/CMakeLists.txt" | cut -d'(' -f2); do
+            case "$NCNN_KEEP" in *" $l "*) ;; *) NCNN_OFF+=(-DWITH_LAYER_$(echo "$l" | tr 'A-Z' 'a-z')=OFF) ;; esac
+        done
+        (cd "$SRC/ncnn" && rm -rf _build &&
+         cmake -S . -B _build -G Ninja ${CMAKE_CROSS[@]+"${CMAKE_CROSS[@]}"} -DCMAKE_BUILD_TYPE=MinSizeRel \
+               -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+               -DNCNN_VULKAN=OFF -DNCNN_SHARED_LIB=OFF -DNCNN_OPENMP=OFF -DNCNN_BUILD_TOOLS=OFF \
+               -DNCNN_BUILD_EXAMPLES=OFF -DNCNN_BUILD_BENCHMARK=OFF -DNCNN_BUILD_TESTS=OFF -DNCNN_PYTHON=OFF \
+               -DNCNN_AVX512=OFF -DNCNN_AVX512VNNI=OFF -DNCNN_AVXVNNI=OFF -DNCNN_AVX512BF16=OFF \
+               -DNCNN_AVX512FP16=OFF -DNCNN_XOP=OFF -DNCNN_AVXVNNIINT8=OFF -DNCNN_AVXVNNIINT16=OFF \
+               -DNCNN_AVXNECONVERT=OFF "${NCNN_OFF[@]}" &&
+         cmake --build _build -j"$JOBS" && cmake --install _build)
+        mark ncnn
+    fi
+    license ncnn "$SRC/ncnn/LICENSE.txt"
 fi
 
 # ---------------------------------------------------------------- FFmpeg (LGPL-2.1 build)

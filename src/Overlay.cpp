@@ -3076,7 +3076,8 @@ void Overlay::drawSidePanel(const PlayerState& st, const AirPlayView& airplay, c
                 convert.busyId = airplay.convertingSub;
                 convert.done = &airplay.convertedSubs;
                 convert.progress = airplay.convertProgress;
-                convert.busyLabel = TF("Converting to text... {}%", {std::to_string(int(airplay.convertProgress * 100))});
+                convert.busyLabel = TF(airplay.convertDownloading ? "Downloading the reading model... {}%" : "Converting to text... {}%",
+                                       {std::to_string(int(airplay.convertProgress * 100))});
             }
             const bool rowClicked = trackList("##subs", subs, sid, true, inner, picked,
                           anyPictures ? +[](const Track& t) { return !isTextSubtitle(t); } : nullptr,

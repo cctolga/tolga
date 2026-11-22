@@ -253,5 +253,12 @@
   "Croatian": "Хорватский",
   "Serbian": "Сербский",
   "Slovak": "Словацкий",
-  "Catalan": "Каталанский"
+  "Catalan": "Каталанский",
+  "Downloading the reading model... {}%": "Загрузка модели распознавания... {}%",
+  "Subtitles in this language can't be converted to text yet.": "Субтитры на этом языке пока нельзя преобразовать в текст.",
+  "Couldn't download the reading model. Check the internet connection.": "Не удалось загрузить модель распознавания. Проверьте подключение к интернету.",
+  "The downloaded reading model was damaged. Try again.": "Загруженная модель распознавания повреждена. Попробуйте ещё раз.",
+  "Couldn't save the reading model.": "Не удалось сохранить модель распознавания.",
+  "The reading model is damaged.": "Модель распознавания повреждена.",
+  "This computer can't read text from pictures.": "Этот компьютер не может распознавать текст на изображениях."
 }

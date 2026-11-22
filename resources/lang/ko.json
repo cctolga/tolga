@@ -253,5 +253,12 @@
   "Croatian": "크로아티아어",
   "Serbian": "세르비아어",
   "Slovak": "슬로바키아어",
-  "Catalan": "카탈루냐어"
+  "Catalan": "카탈루냐어",
+  "Downloading the reading model... {}%": "읽기 모델 다운로드 중... {}%",
+  "Subtitles in this language can't be converted to text yet.": "이 언어의 자막은 아직 텍스트로 변환할 수 없습니다.",
+  "Couldn't download the reading model. Check the internet connection.": "읽기 모델을 다운로드할 수 없습니다. 인터넷 연결을 확인하세요.",
+  "The downloaded reading model was damaged. Try again.": "다운로드한 읽기 모델이 손상되었습니다. 다시 시도하세요.",
+  "Couldn't save the reading model.": "읽기 모델을 저장할 수 없습니다.",
+  "The reading model is damaged.": "읽기 모델이 손상되었습니다.",
+  "This computer can't read text from pictures.": "이 컴퓨터는 이미지의 글자를 읽을 수 없습니다."
 }
