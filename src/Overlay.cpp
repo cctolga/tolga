@@ -1687,16 +1687,6 @@ void iconBubble(ImDrawList* dl, ImVec2 c, ImU32 col) {
 
 // A rounded list of tracks with "<None>" on top. `selected` is the chosen track ID (-1 = none).
 // Returns true and sets `picked` when a row was clicked.
-// Subtitles kept as text, which the Apple TV can show (WebVTT); the others (PGS, DVD) are
-// pictures. The same list as the AirPlay module's.
-bool isTextSubtitle(const Track& t) {
-    if (t.external) return true;
-    std::string c = t.codec;
-    for (char& ch : c) ch = char(std::tolower(static_cast<unsigned char>(ch)));
-    return c == "subrip" || c == "srt" || c == "mov_text" || c == "ass" || c == "ssa" || c == "webvtt" ||
-           c == "text" || c == "microdvd" || c == "subviewer" || c == "tx3g";
-}
-
 // `notHere`: rows it says yes to are dimmed and marked with `notHereLabel` (still clickable).
 bool trackList(const char* id, const std::vector<const Track*>& tracks, int64_t selected, bool withNone,
                float width, int64_t& picked, bool (*notHere)(const Track&) = nullptr,

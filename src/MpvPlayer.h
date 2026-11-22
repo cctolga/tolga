@@ -28,6 +28,11 @@ struct Track {
     std::string label() const;     // human readable name for menus
 };
 
+// Subtitles kept as text, which the Apple TV can show (WebVTT); the others (PGS, DVD) are
+// pictures. The same list as the AirPlay module's.
+bool isTextSubtitle(const Track& t);
+
+
 // One entry of mpv's playlist.
 struct PlaylistEntry {
     std::string path;

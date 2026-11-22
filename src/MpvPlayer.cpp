@@ -1,5 +1,6 @@
 #include "MpvPlayer.h"
 
+#include <cctype>
 #include <algorithm>
 #include "I18n.h"
 #include "Paths.h"
@@ -642,4 +643,12 @@ std::string MpvPlayer::propertyString(const char* name) const {
     std::string out = v;
     mpv_free(v);
     return out;
+}
+
+bool isTextSubtitle(const Track& t) {
+    if (t.external) return true;
+    std::string c = t.codec;
+    for (char& ch : c) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+    return c == "subrip" || c == "srt" || c == "mov_text" || c == "ass" || c == "ssa" || c == "webvtt" ||
+           c == "text" || c == "microdvd" || c == "subviewer" || c == "tx3g";
 }

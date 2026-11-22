@@ -268,6 +268,20 @@ static int64_t selectedTrack(const PlayerState& st, const char* type) {
     return -1;
 }
 
+// What the TV shows for the subtitle `sid` chosen here. The Apple TV shows only text subtitles:
+// a picture one (DVD, Blu-ray PGS) stands for a text one in the same language when the file has
+// one (forced for forced), and for none otherwise.
+static int64_t tvSubtitleFor(const PlayerState& st, int64_t sid) {
+    const Track* chosen = nullptr;
+    for (const Track& t : st.tracks)
+        if (t.type == "sub" && t.id == sid) chosen = &t;
+    if (!chosen || isTextSubtitle(*chosen)) return sid;
+    if (chosen->lang.empty()) return -1;
+    for (const Track& t : st.tracks)
+        if (t.type == "sub" && isTextSubtitle(t) && t.lang == chosen->lang && t.forced == chosen->forced) return t.id;
+    return -1;
+}
+
 int main(int argc, char** argv) {
     g_traceStart = SDL_GetTicksNS();
     if (const char* t = std::getenv("TOLGA_TRACE"); t && *t && *t != '0') {
@@ -445,6 +459,12 @@ int main(int argc, char** argv) {
     RecentFiles recent(configDir);
     ResumePositions positions(configDir);  // where each video was left
     std::string castPath;                  // the file the TV was given (its position is the TV's)
+    // A file opened while casting goes to the TV once mpv has listed its tracks: at "file
+    // loaded" the list can still be empty, and with no video track in it the module took the
+    // file for sound only ("Apple TV can't play this file type").
+    std::string castAfterLoad;
+    double castAfterLoadFrom = -1;
+    Uint64 castAfterLoadSince = 0;
     // "Make Tolga Player your default video player" on the idle screen, until it is
     defaultapp::refresh();  // Linux: a default entry left pointing at a deleted AppImage
     const bool defaultAvailable = defaultapp::available();
@@ -536,7 +556,14 @@ int main(int argc, char** argv) {
             player.setPause(true);
             castTrackSig = trackSignature(st);
             castSentAudio = selectedTrack(st, "audio");
-            castSentSub = selectedTrack(st, "sub");
+            castSentSub = tvSubtitleFor(st, selectedTrack(st, "sub"));
+            if (castSentSub != selectedTrack(st, "sub")) {
+                std::fprintf(stderr, "[sync] sub %lld is stored as pictures; the TV gets %lld\n",
+                             (long long)selectedTrack(st, "sub"), (long long)castSentSub);
+                if (castSentSub < 0)
+                    overlay.showToast(TF("{} shows only text subtitles, and this one is stored as pictures. Search online for a text one.",
+                                         {d.name}));
+            }
             castSeenSerial = 0;
             castPath = st.path;
             std::fprintf(stderr, "[sync] cast starts with audio %lld sub %lld (visible %d)\n", (long long)castSentAudio,
@@ -738,10 +765,11 @@ int main(int argc, char** argv) {
                 }
                 if (fileLoaded && !castTarget.empty()) {
                     // a new file was opened while casting: send it to the TV too (from where
-                    // it was left: the jump above hasn't landed yet)
-                    const std::string target = castTarget;
+                    // it was left: the jump above hasn't landed yet), once its tracks are known
                     player.setPause(true);
-                    startCast(target, resumeAt);
+                    castAfterLoad = castTarget;
+                    castAfterLoadFrom = resumeAt;
+                    castAfterLoadSince = SDL_GetTicks();
                 }
                 if (fileLoaded) {
                     trace("mpv: file loaded");
@@ -911,6 +939,16 @@ int main(int argc, char** argv) {
         }
 
         // ---- casting status (updated from the network thread, polled here)
+        if (!castAfterLoad.empty()) {
+            const PlayerState& pst = player.state();
+            if (castTarget != castAfterLoad || pst.idle) {
+                castAfterLoad.clear();  // the cast ended meanwhile
+            } else if (!pst.tracks.empty() || SDL_GetTicks() - castAfterLoadSince > 3000) {
+                const std::string target = castAfterLoad;
+                castAfterLoad.clear();
+                startCast(target, castAfterLoadFrom);
+            }
+        }
         castStatus = airplay->status();
         // where the video is now (on the TV while casting), to continue from there next time
         if (const PlayerState& pst = player.state(); !pst.idle && pst.duration > 0) {
@@ -949,7 +987,10 @@ int main(int argc, char** argv) {
             const PlayerState& pst = player.state();
             using P = CastStatus::Phase;
             const bool live = castStatus.phase == P::Playing || castStatus.phase == P::Paused;
-            if (!pst.idle && trackSignature(pst) != castTrackSig && (live || castStatus.phase == P::Loading)) {
+            // (only for the file on the TV: another one being opened empties the track list
+            // first, which isn't a change of this file's tracks; that one goes with castAfterLoad)
+            const bool sameFile = pst.path == castPath && castAfterLoad.empty() && !pst.tracks.empty();
+            if (!pst.idle && sameFile && trackSignature(pst) != castTrackSig && (live || castStatus.phase == P::Loading)) {
                 // a subtitle file was added: package again and continue on the TV where it is
                 std::fprintf(stderr, "[airplay] tracks changed, sending the video again\n");
                 const double pos = castStatus.position;
@@ -971,7 +1012,7 @@ int main(int argc, char** argv) {
                     startCast(target, pos);
                 }
                 redrawFrames = std::max(redrawFrames, 1);
-            } else if (castStatus.hls && live) {
+            } else if (castStatus.hls && live && sameFile) {
                 if (castStatus.selectionSerial != castSeenSerial) {
                     // the TV reports its tracks (e.g. changed with the Siri remote): mirror them here
                     const bool firstReport = castSeenSerial == 0;
@@ -999,12 +1040,15 @@ int main(int argc, char** argv) {
                                  (long long)selectedTrack(pst, "audio"), (long long)selectedTrack(pst, "sub"), int(pst.subVisible));
                     if (castStatus.tvAudio >= 0 && castStatus.tvAudio != selectedTrack(pst, "audio"))
                         player.selectAudio(castStatus.tvAudio);
-                    if (!keepSub && castStatus.tvSub != selectedTrack(pst, "sub")) {
+                    // (a picture subtitle here stays when the TV shows its text counterpart)
+                    if (!keepSub && castStatus.tvSub != selectedTrack(pst, "sub") &&
+                        castStatus.tvSub != tvSubtitleFor(pst, selectedTrack(pst, "sub"))) {
                         player.selectSubtitle(castStatus.tvSub);
                         if (castStatus.tvSub >= 0 && !pst.subVisible) player.setSubVisibility(true);
                     }
                 } else {
-                    const int64_t aid = selectedTrack(pst, "audio"), sid = selectedTrack(pst, "sub");
+                    const int64_t aid = selectedTrack(pst, "audio");
+                    const int64_t sid = tvSubtitleFor(pst, selectedTrack(pst, "sub"));  // what the TV can show
                     const bool caughtUp = (aid == castSentAudio || castSentAudio < 0) && sid == castSentSub;
                     if (caughtUp) castMirrorUntil = 0;
                     if (SDL_GetTicks() >= castMirrorUntil) {
