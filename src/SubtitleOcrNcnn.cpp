@@ -255,12 +255,12 @@ struct Model {
     std::vector<std::string> chars;   // [0] is the CTC blank, the last one a space
 };
 std::mutex g_modelMutex;
-std::unique_ptr<Model> g_model;
+std::shared_ptr<Model> g_model;  // (readers keep their copy: a new language can't pull it away mid-picture)
 std::string g_lang;  // the language ocrRecognize is for (set by ocrPrepare)
 
 bool loadModel(const std::string& group, const std::string& path, std::string& error) {
     if (g_model && g_model->group == group) return true;
-    auto m = std::make_unique<Model>();
+    auto m = std::make_shared<Model>();
     m->group = group;
     {
         std::ifstream in(utf8Path(path), std::ios::binary);
@@ -290,8 +290,9 @@ bool loadModel(const std::string& group, const std::string& path, std::string& e
     const unsigned char* weights = m->file.data() + at + sizes[0];
     const std::string dict(reinterpret_cast<const char*>(m->file.data() + at + sizes[0] + sizes[1]), size_t(sizes[2]));
     m->net.opt.use_vulkan_compute = false;
-    // half the cores: the movie keeps playing smoothly meanwhile
-    m->net.opt.num_threads = int(std::max(1u, std::thread::hardware_concurrency() / 2));
+    // one thread per picture: several pictures are read at once (ocrThreads), which uses the
+    // cores better than splitting one small picture between them
+    m->net.opt.num_threads = 1;
     if (m->net.load_param_mem(param.c_str()) != 0 || m->net.load_model(weights) <= 0) {
         error = "The reading model is damaged.";
         return false;
@@ -348,6 +349,12 @@ ncnn::Mat lineInput(const std::vector<uint8_t>& gray, int w, int x0, int y0, int
 
 bool ocrAvailable() { return true; }
 
+// every core but one (the movie keeps playing smoothly meanwhile)
+int ocrThreads() {
+    if (const char* env = std::getenv("TOLGA_OCR_THREADS")) return std::max(1, std::atoi(env));  // tests
+    return int(std::max(1u, std::thread::hardware_concurrency() - 1));
+}
+
 bool ocrPrepare(const std::string& lang, const std::function<void(float)>& progress, const std::atomic<bool>& cancel,
                 std::string& error) {
     const std::string group = groupFor(lang);
@@ -377,8 +384,12 @@ bool ocrPrepare(const std::string& lang, const std::function<void(float)>& progr
 bool ocrRecognize(const std::vector<uint8_t>& gray, int width, int height, const std::string&,
                   std::vector<OcrPiece>& pieces) {
     pieces.clear();
-    std::lock_guard<std::mutex> lock(g_modelMutex);
-    if (!g_model) return false;
+    std::shared_ptr<Model> model;
+    {
+        std::lock_guard<std::mutex> lock(g_modelMutex);
+        model = g_model;
+    }
+    if (!model) return false;  // (an ncnn Net can run several extractors at once)
     // lines: rows with ink, joined across gaps much smaller than a line (the gaps inside letters)
     std::vector<std::pair<int, int>> runs;
     int start = -1;
@@ -406,7 +417,7 @@ bool ocrRecognize(const std::vector<uint8_t>& gray, int width, int height, const
         const int m = 8;
         const int cx0 = std::max(0, x0 - m), cx1 = std::min(width - 1, x1 + m);
         const int cy0 = std::max(0, ly0 - m), cy1 = std::min(height - 1, ly1 + m);
-        ncnn::Extractor ex = g_model->net.create_extractor();
+        ncnn::Extractor ex = model->net.create_extractor();
         ex.input("in0", lineInput(gray, width, cx0, cy0, cx1, cy1));
         ncnn::Mat out;
         if (ex.extract("out0", out) != 0) continue;
@@ -416,7 +427,7 @@ bool ocrRecognize(const std::vector<uint8_t>& gray, int width, int height, const
         for (int t = 0; t < out.h; ++t) {
             const float* row = out.row(t);
             const int best = int(std::max_element(row, row + out.w) - row);
-            if (best != prev && best > 0 && best < int(g_model->chars.size())) text += g_model->chars[size_t(best)];
+            if (best != prev && best > 0 && best < int(model->chars.size())) text += model->chars[size_t(best)];
             prev = best;
         }
         // "..." comes out as ".." (two same characters in a row need a blank between them)

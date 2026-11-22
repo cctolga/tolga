@@ -21,6 +21,9 @@ bool ocrAvailable();
 // language can't be read here or the download failed (`error` says why, in English).
 bool ocrPrepare(const std::string& lang, const std::function<void(float)>& progress, const std::atomic<bool>& cancel,
                 std::string& error);
+// How many pictures to read at the same time (each call to ocrRecognize then comes from its
+// own thread): the recognition is what takes the time.
+int ocrThreads();
 // A piece of text found in a picture and where it is (pixels, top-left origin).
 struct OcrPiece {
     std::string text;

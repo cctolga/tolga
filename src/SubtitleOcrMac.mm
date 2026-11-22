@@ -39,6 +39,9 @@ bool ocrPrepare(const std::string&, const std::function<void(float)>&, const std
     return true;
 }
 
+// Vision runs on the Neural Engine / graphics chip: two at a time keep it busy
+int ocrThreads() { return 2; }
+
 bool ocrAvailable() {
     if (@available(macOS 10.15, *)) return true;
     return false;
@@ -60,7 +63,7 @@ bool ocrRecognize(const std::vector<uint8_t>& gray, int width, int height, const
             VNRecognizeTextRequest* req = [[VNRecognizeTextRequest alloc] init];
             req.recognitionLevel = VNRequestTextRecognitionLevelAccurate;
             req.usesLanguageCorrection = YES;
-            static bool logged = false;
+            static std::atomic<bool> logged{false};
             if (NSString* want = visionLanguage(lang)) {
                 NSError* err = nil;
                 NSArray<NSString*>* supported = [req supportedRecognitionLanguagesAndReturnError:&err];
@@ -74,10 +77,9 @@ bool ocrRecognize(const std::vector<uint8_t>& gray, int width, int height, const
                         break;
                     }
                 if (use) req.recognitionLanguages = @[ use ];
-                if (!logged) {
+                if (!logged.exchange(true)) {
                     std::fprintf(stderr, "[ocr] language %s -> %s\n", lang.c_str(),
                                  use ? use.UTF8String : "not supported here, using the default");
-                    logged = true;
                 }
             }
             VNImageRequestHandler* handler = [[VNImageRequestHandler alloc] initWithCGImage:img options:@{}];

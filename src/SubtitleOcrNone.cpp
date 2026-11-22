@@ -4,6 +4,8 @@
 
 bool ocrAvailable() { return false; }
 
+int ocrThreads() { return 1; }
+
 bool ocrPrepare(const std::string&, const std::function<void(float)>&, const std::atomic<bool>&, std::string& error) {
     error = "This computer can't read text from pictures.";
     return false;

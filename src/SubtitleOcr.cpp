@@ -9,6 +9,10 @@ extern "C" {
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <map>
 #include <cmath>
 #include <cstring>
 #include <cstdio>
@@ -617,11 +621,57 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
     const double offset = fmt->start_time != AV_NOPTS_VALUE ? fmt->start_time / double(AV_TIME_BASE) : 0.0;
     const int64_t fileSize = fmt->pb ? avio_size(fmt->pb) : -1;
 
+    // Every subtitle picture, in file order, with its time. They are read as text by a few
+    // workers at once (recognition is what takes the time; on an older PC with two cores that
+    // is the difference between minutes and many minutes), while this thread reads the file.
     std::vector<Event> events;
+    struct Job { size_t index; std::vector<uint8_t> src; int sw, sh; float base; };
+    std::deque<Job> queue;
+    std::map<size_t, std::string> texts;
+    std::mutex qm;
+    std::condition_variable hasJob, hasRoom;
+    bool fed = false;
+    const int nWorkers = std::max(1, ocrThreads());
+    const size_t maxQueued = size_t(nWorkers) * 2;  // pictures waiting: a few, not the whole film in memory
+    auto worker = [&]() {
+        std::vector<uint8_t> gray;
+        for (;;) {
+            Job job;
+            {
+                std::unique_lock<std::mutex> lock(qm);
+                // (with a timeout: cancel() doesn't wake anyone)
+                while (!hasJob.wait_for(lock, std::chrono::milliseconds(100),
+                                        [&] { return !queue.empty() || fed || m_cancel; })) {}
+                if (m_cancel || queue.empty()) return;
+                job = std::move(queue.front());
+                queue.pop_front();
+            }
+            hasRoom.notify_one();
+            std::vector<OcrPiece> pieces;
+            bool found = false;
+            int w = 0, h = 0;
+            // nothing read: once more smaller, then bigger ("Hi.", "응", "ソー")
+            for (const float f : {1.0f, 0.66f, 1.5f}) {
+                scaledPicture(job.src, job.sw, job.sh, job.base * f, 48, gray, w, h);
+                if ((found = ocrRecognize(gray, w, h, lang, pieces))) break;
+            }
+            std::string text = found ? ocrAssemble(gray, w, h, lang, std::move(pieces)) : std::string();
+            std::lock_guard<std::mutex> lock(qm);
+            texts[job.index] = std::move(text);
+        }
+    };
+    std::vector<std::thread> workers;
+    for (int i = 0; i < nWorkers; ++i) workers.emplace_back(worker);
+    struct Joiner {
+        std::vector<std::thread>& t; std::mutex& m; std::condition_variable& cv; bool& fed;
+        ~Joiner() { { std::lock_guard<std::mutex> lock(m); fed = true; } cv.notify_all(); for (auto& th : t) if (th.joinable()) th.join(); }
+    } joinWorkers{workers, qm, hasJob, fed};
+    const auto began = std::chrono::steady_clock::now();
+
     int read = 0, recognized = 0;
     AVPacket* pkt = av_packet_alloc();
     struct PktFree { AVPacket** p; ~PktFree() { av_packet_free(p); } } freePkt{&pkt};
-    std::vector<uint8_t> src, gray;
+    std::vector<uint8_t> src;
     while (!m_cancel && av_read_frame(fmt, pkt) >= 0) {
         if (pkt->stream_index == ffIndex && pkt->pts != AV_NOPTS_VALUE) {
             AVSubtitle sub{};
@@ -631,7 +681,7 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
                 const double start = at + sub.start_display_time / 1000.0;
                 // an open subtitle ends where the next one (or an empty clear) begins
                 if (!events.empty() && (events.back().end < 0 || events.back().end > start)) events.back().end = start;
-                int sw = 0, sh = 0, w = 0, h = 0;
+                int sw = 0, sh = 0;
                 if (sub.num_rects > 0 && subtitlePicture(sub, src, sw, sh)) {
                     ++read;
                     Event ev;
@@ -649,20 +699,15 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
                     const int canvas = dec->height > 0 ? dec->height : videoHeight;
                     const float base = canvas > 0 && canvas <= 600 ? 3.0f
                                        : canvas > 0 ? std::clamp(1080.0f / canvas, 0.4f, 2.0f) : 1.0f;
-                    std::vector<OcrPiece> pieces;
-                    bool found = false;
-                    // nothing read: once more smaller, then bigger ("Hi.", "응", "ソー")
-                    for (const float f : {1.0f, 0.66f, 1.5f}) {
-                        scaledPicture(src, sw, sh, base * f, 48, gray, w, h);
-                        if ((found = ocrRecognize(gray, w, h, lang, pieces))) break;
+                    events.push_back(std::move(ev));
+                    {
+                        std::unique_lock<std::mutex> lock(qm);
+                        while (!hasRoom.wait_for(lock, std::chrono::milliseconds(100),
+                                                 [&] { return queue.size() < maxQueued || m_cancel; })) {}
+                        if (m_cancel) break;
+                        queue.push_back(Job{events.size() - 1, src, sw, sh, base});
                     }
-                    if (found) {
-                        ev.text = ocrAssemble(gray, w, h, lang, std::move(pieces));
-                        if (!ev.text.empty()) {
-                            ++recognized;
-                            events.push_back(std::move(ev));
-                        }
-                    }
+                    hasJob.notify_one();
                 }
                 avsubtitle_free(&sub);
             }
@@ -677,9 +722,29 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
             }
         }
     }
+    const double readSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+    {
+        std::lock_guard<std::mutex> lock(qm);
+        fed = true;
+    }
+    hasJob.notify_all();
+    hasRoom.notify_all();
+    for (std::thread& t : workers) t.join();
     if (m_cancel) return;
-    if (!events.empty() && events.back().end < 0) events.back().end = events.back().start + 4.0;
-    std::fprintf(stderr, "[ocr] %d picture(s), %d read as text\n", read, recognized);
+    // the text of each picture; the ones nothing could be read from go
+    std::vector<Event> withText;
+    for (size_t i = 0; i < events.size(); ++i) {
+        if (events[i].end < 0) events[i].end = i + 1 < events.size() ? events[i + 1].start : events[i].start + 4.0;
+        auto it = texts.find(i);
+        if (it == texts.end() || it->second.empty()) continue;
+        events[i].text = std::move(it->second);
+        withText.push_back(std::move(events[i]));
+        ++recognized;
+    }
+    events = std::move(withText);
+    std::fprintf(stderr, "[ocr] %d picture(s), %d read as text, %d worker(s), %.0f s (the file read in %.0f s)\n", read,
+                 recognized, nWorkers,
+                 std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count(), readSeconds);
     if (events.empty()) return finish(false, "no text found");
 
     // one entry per subtitle; the same text repeated back to back is one longer entry
