@@ -20,6 +20,21 @@ extern "C" {
 #include <fstream>
 #include <system_error>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX  // (std::min / std::max)
+#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <pthread.h>
+#include <pthread/qos.h>
+#elif defined(__linux__)
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 namespace {
 
 struct Event {
@@ -365,6 +380,19 @@ std::string fixLine(std::string t, const std::string& lang) {
     return out;
 }
 
+// Reading runs below everything else: on a computer with few cores it would otherwise take
+// the time the movie needs (the TV stalled while subtitles were being read on a two-core PC),
+// and it still gets every moment the computer has to spare.
+void lowerThisThread() {
+#if defined(_WIN32)
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+#elif defined(__APPLE__)
+    pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
+#elif defined(__linux__)
+    setpriority(PRIO_PROCESS, pid_t(syscall(SYS_gettid)), 15);  // (on Linux a thread has its own nice value)
+#endif
+}
+
 }  // namespace
 
 std::string ocrAssemble(const std::vector<uint8_t>& gray, int width, int height, const std::string& lang,
@@ -634,6 +662,7 @@ void SubtitleOcr::run(std::string video, int64_t ffIndex, std::string lang, std:
     const int nWorkers = std::max(1, ocrThreads());
     const size_t maxQueued = size_t(nWorkers) * 2;  // pictures waiting: a few, not the whole film in memory
     auto worker = [&]() {
+        lowerThisThread();
         std::vector<uint8_t> gray;
         for (;;) {
             Job job;
