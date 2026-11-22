@@ -337,6 +337,7 @@ if [ "$OS" = linux ] || [ "$OS" = windows ]; then
         NCNN_KEEP=" BinaryOp Concat Convolution ConvolutionDepthWise Gemm HardSigmoid HardSwish InnerProduct Input
                    LayerNorm MultiHeadAttention Permute Pooling Reshape Softmax Split Squeeze Swish Padding Packing
                    Cast Flatten Crop Slice Eltwise Noop Dropout MatMul ExpandDims Sigmoid ReLU Interp Clip UnaryOp "
+        NCNN_KEEP=" $(echo $NCNN_KEEP) "  # one line: a name at the end of a line above must match too
         NCNN_OFF=()
         for l in $(grep -o 'ncnn_add_layer([A-Za-z0-9_]*' "$SRC/ncnn/src/CMakeLists.txt" | cut -d'(' -f2); do
             case "$NCNN_KEEP" in *" $l "*) ;; *) NCNN_OFF+=(-DWITH_LAYER_$(echo "$l" | tr 'A-Z' 'a-z')=OFF) ;; esac
